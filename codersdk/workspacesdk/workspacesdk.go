@@ -55,6 +55,8 @@ const (
 	AgentMinimumListeningPort = 9
 )
 
+const AgentAPIMismatchMessage = "Unknown or unsupported API version"
+
 // AgentIgnoredListeningPorts contains a list of ports to ignore when looking for
 // running applications inside a workspace. We want to ignore non-HTTP servers,
 // so we pre-populate this list with common ports that are not HTTP servers.
@@ -180,6 +182,9 @@ type DialAgentOptions struct {
 	// CaptureHook is a callback that captures Disco packets and packets sent
 	// into the tailnet tunnel.
 	CaptureHook capture.Callback
+	// Whether the client will send network telemetry events.
+	// Enable instead of Disable so it's initialized to false (in tests).
+	EnableTelemetry bool
 }
 
 func (c *Client) DialAgent(dialCtx context.Context, agentID uuid.UUID, options *DialAgentOptions) (agentConn *AgentConn, err error) {
@@ -194,29 +199,6 @@ func (c *Client) DialAgent(dialCtx context.Context, agentID uuid.UUID, options *
 	if connInfo.DisableDirectConnections {
 		options.BlockEndpoints = true
 	}
-
-	ip := tailnet.IP()
-	var header http.Header
-	if headerTransport, ok := c.client.HTTPClient.Transport.(*codersdk.HeaderTransport); ok {
-		header = headerTransport.Header
-	}
-	conn, err := tailnet.NewConn(&tailnet.Options{
-		Addresses:           []netip.Prefix{netip.PrefixFrom(ip, 128)},
-		DERPMap:             connInfo.DERPMap,
-		DERPHeader:          &header,
-		DERPForceWebSockets: connInfo.DERPForceWebSockets,
-		Logger:              options.Logger,
-		BlockEndpoints:      c.client.DisableDirectConnections || options.BlockEndpoints,
-		CaptureHook:         options.CaptureHook,
-	})
-	if err != nil {
-		return nil, xerrors.Errorf("create tailnet: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			_ = conn.Close()
-		}
-	}()
 
 	headers := make(http.Header)
 	tokenHeader := codersdk.SessionTokenHeader
@@ -239,19 +221,55 @@ func (c *Client) DialAgent(dialCtx context.Context, agentID uuid.UUID, options *
 		return nil, xerrors.Errorf("parse url: %w", err)
 	}
 	q := coordinateURL.Query()
-	q.Add("version", proto.CurrentVersion.String())
+	// TODO (ethanndickson) - the current version includes 2 additions we don't currently use:
+	//
+	// 2.1 GetAnnouncementBanners on the Agent API (version locked to Tailnet API)
+	// 2.2 PostTelemetry on the Tailnet API
+	//
+	// So, asking for API 2.2 just makes us incompatible back level servers, for no real benefit.
+	// As a temporary measure, we'll specifically ask for API version 2.0 until we implement sending
+	// telemetry.
+	q.Add("version", "2.0")
 	coordinateURL.RawQuery = q.Encode()
 
-	connector := runTailnetAPIConnector(ctx, options.Logger,
-		agentID, coordinateURL.String(),
+	connector := newTailnetAPIConnector(ctx, options.Logger, agentID, coordinateURL.String(),
 		&websocket.DialOptions{
 			HTTPClient: c.client.HTTPClient,
 			HTTPHeader: headers,
 			// Need to disable compression to avoid a data-race.
 			CompressionMode: websocket.CompressionDisabled,
-		},
-		conn,
-	)
+		})
+
+	ip := tailnet.IP()
+	var header http.Header
+	if headerTransport, ok := c.client.HTTPClient.Transport.(*codersdk.HeaderTransport); ok {
+		header = headerTransport.Header
+	}
+	var telemetrySink tailnet.TelemetrySink
+	if options.EnableTelemetry {
+		telemetrySink = connector
+	}
+	conn, err := tailnet.NewConn(&tailnet.Options{
+		Addresses:           []netip.Prefix{netip.PrefixFrom(ip, 128)},
+		DERPMap:             connInfo.DERPMap,
+		DERPHeader:          &header,
+		DERPForceWebSockets: connInfo.DERPForceWebSockets,
+		Logger:              options.Logger,
+		BlockEndpoints:      c.client.DisableDirectConnections || options.BlockEndpoints,
+		CaptureHook:         options.CaptureHook,
+		ClientType:          proto.TelemetryEvent_CLI,
+		TelemetrySink:       telemetrySink,
+	})
+	if err != nil {
+		return nil, xerrors.Errorf("create tailnet: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = conn.Close()
+		}
+	}()
+	connector.runConnector(conn)
+
 	options.Logger.Debug(ctx, "running tailnet API v2+ connector")
 
 	select {

@@ -444,12 +444,21 @@ func (q *sqlQuerier) UpdateAPIKeyByID(ctx context.Context, arg UpdateAPIKeyByIDP
 const getAuditLogsOffset = `-- name: GetAuditLogsOffset :many
 SELECT
     audit_logs.id, audit_logs.time, audit_logs.user_id, audit_logs.organization_id, audit_logs.ip, audit_logs.user_agent, audit_logs.resource_type, audit_logs.resource_id, audit_logs.resource_target, audit_logs.action, audit_logs.diff, audit_logs.status_code, audit_logs.additional_fields, audit_logs.request_id, audit_logs.resource_icon,
+    -- sqlc.embed(users) would be nice but it does not seem to play well with
+    -- left joins.
     users.username AS user_username,
+    users.name AS user_name,
     users.email AS user_email,
     users.created_at AS user_created_at,
+    users.updated_at AS user_updated_at,
+    users.last_seen_at AS user_last_seen_at,
     users.status AS user_status,
+    users.login_type AS user_login_type,
     users.rbac_roles AS user_roles,
     users.avatar_url AS user_avatar_url,
+    users.deleted AS user_deleted,
+    users.theme_preference AS user_theme_preference,
+    users.quiet_hours_schedule AS user_quiet_hours_schedule,
     COUNT(audit_logs.*) OVER () AS count
 FROM
     audit_logs
@@ -481,77 +490,85 @@ FROM
 WHERE
     -- Filter resource_type
 	CASE
-		WHEN $3 :: text != '' THEN
-			resource_type = $3 :: resource_type
+		WHEN $1 :: text != '' THEN
+			resource_type = $1 :: resource_type
 		ELSE true
 	END
 	-- Filter resource_id
 	AND CASE
-		WHEN $4 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
-			resource_id = $4
+		WHEN $2 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			resource_id = $2
+		ELSE true
+	END
+  	-- Filter organization_id
+  	AND CASE
+		WHEN $3 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			audit_logs.organization_id = $3
 		ELSE true
 	END
 	-- Filter by resource_target
 	AND CASE
-		WHEN $5 :: text != '' THEN
-			resource_target = $5
+		WHEN $4 :: text != '' THEN
+			resource_target = $4
 		ELSE true
 	END
 	-- Filter action
 	AND CASE
-		WHEN $6 :: text != '' THEN
-			action = $6 :: audit_action
+		WHEN $5 :: text != '' THEN
+			action = $5 :: audit_action
 		ELSE true
 	END
 	-- Filter by user_id
 	AND CASE
-		WHEN $7 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
-			user_id = $7
+		WHEN $6 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			user_id = $6
 		ELSE true
 	END
 	-- Filter by username
 	AND CASE
-		WHEN $8 :: text != '' THEN
-			user_id = (SELECT id FROM users WHERE lower(username) = lower($8) AND deleted = false)
+		WHEN $7 :: text != '' THEN
+			user_id = (SELECT id FROM users WHERE lower(username) = lower($7) AND deleted = false)
 		ELSE true
 	END
 	-- Filter by user_email
 	AND CASE
-		WHEN $9 :: text != '' THEN
-			users.email = $9
+		WHEN $8 :: text != '' THEN
+			users.email = $8
 		ELSE true
 	END
 	-- Filter by date_from
 	AND CASE
-		WHEN $10 :: timestamp with time zone != '0001-01-01 00:00:00Z' THEN
-			"time" >= $10
+		WHEN $9 :: timestamp with time zone != '0001-01-01 00:00:00Z' THEN
+			"time" >= $9
 		ELSE true
 	END
 	-- Filter by date_to
 	AND CASE
-		WHEN $11 :: timestamp with time zone != '0001-01-01 00:00:00Z' THEN
-			"time" <= $11
+		WHEN $10 :: timestamp with time zone != '0001-01-01 00:00:00Z' THEN
+			"time" <= $10
 		ELSE true
 	END
     -- Filter by build_reason
     AND CASE
-	    WHEN $12::text != '' THEN
-            workspace_builds.reason::text = $12
+	    WHEN $11::text != '' THEN
+            workspace_builds.reason::text = $11
         ELSE true
     END
 ORDER BY
     "time" DESC
 LIMIT
-    $1
+	-- a limit of 0 means "no limit". The audit log table is unbounded
+	-- in size, and is expected to be quite large. Implement a default
+	-- limit of 100 to prevent accidental excessively large queries.
+	COALESCE(NULLIF($13 :: int, 0), 100)
 OFFSET
-    $2
+    $12
 `
 
 type GetAuditLogsOffsetParams struct {
-	Limit          int32     `db:"limit" json:"limit"`
-	Offset         int32     `db:"offset" json:"offset"`
 	ResourceType   string    `db:"resource_type" json:"resource_type"`
 	ResourceID     uuid.UUID `db:"resource_id" json:"resource_id"`
+	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
 	ResourceTarget string    `db:"resource_target" json:"resource_target"`
 	Action         string    `db:"action" json:"action"`
 	UserID         uuid.UUID `db:"user_id" json:"user_id"`
@@ -560,41 +577,49 @@ type GetAuditLogsOffsetParams struct {
 	DateFrom       time.Time `db:"date_from" json:"date_from"`
 	DateTo         time.Time `db:"date_to" json:"date_to"`
 	BuildReason    string    `db:"build_reason" json:"build_reason"`
+	OffsetOpt      int32     `db:"offset_opt" json:"offset_opt"`
+	LimitOpt       int32     `db:"limit_opt" json:"limit_opt"`
 }
 
 type GetAuditLogsOffsetRow struct {
-	ID               uuid.UUID       `db:"id" json:"id"`
-	Time             time.Time       `db:"time" json:"time"`
-	UserID           uuid.UUID       `db:"user_id" json:"user_id"`
-	OrganizationID   uuid.UUID       `db:"organization_id" json:"organization_id"`
-	Ip               pqtype.Inet     `db:"ip" json:"ip"`
-	UserAgent        sql.NullString  `db:"user_agent" json:"user_agent"`
-	ResourceType     ResourceType    `db:"resource_type" json:"resource_type"`
-	ResourceID       uuid.UUID       `db:"resource_id" json:"resource_id"`
-	ResourceTarget   string          `db:"resource_target" json:"resource_target"`
-	Action           AuditAction     `db:"action" json:"action"`
-	Diff             json.RawMessage `db:"diff" json:"diff"`
-	StatusCode       int32           `db:"status_code" json:"status_code"`
-	AdditionalFields json.RawMessage `db:"additional_fields" json:"additional_fields"`
-	RequestID        uuid.UUID       `db:"request_id" json:"request_id"`
-	ResourceIcon     string          `db:"resource_icon" json:"resource_icon"`
-	UserUsername     sql.NullString  `db:"user_username" json:"user_username"`
-	UserEmail        sql.NullString  `db:"user_email" json:"user_email"`
-	UserCreatedAt    sql.NullTime    `db:"user_created_at" json:"user_created_at"`
-	UserStatus       NullUserStatus  `db:"user_status" json:"user_status"`
-	UserRoles        pq.StringArray  `db:"user_roles" json:"user_roles"`
-	UserAvatarUrl    sql.NullString  `db:"user_avatar_url" json:"user_avatar_url"`
-	Count            int64           `db:"count" json:"count"`
+	ID                     uuid.UUID       `db:"id" json:"id"`
+	Time                   time.Time       `db:"time" json:"time"`
+	UserID                 uuid.UUID       `db:"user_id" json:"user_id"`
+	OrganizationID         uuid.UUID       `db:"organization_id" json:"organization_id"`
+	Ip                     pqtype.Inet     `db:"ip" json:"ip"`
+	UserAgent              sql.NullString  `db:"user_agent" json:"user_agent"`
+	ResourceType           ResourceType    `db:"resource_type" json:"resource_type"`
+	ResourceID             uuid.UUID       `db:"resource_id" json:"resource_id"`
+	ResourceTarget         string          `db:"resource_target" json:"resource_target"`
+	Action                 AuditAction     `db:"action" json:"action"`
+	Diff                   json.RawMessage `db:"diff" json:"diff"`
+	StatusCode             int32           `db:"status_code" json:"status_code"`
+	AdditionalFields       json.RawMessage `db:"additional_fields" json:"additional_fields"`
+	RequestID              uuid.UUID       `db:"request_id" json:"request_id"`
+	ResourceIcon           string          `db:"resource_icon" json:"resource_icon"`
+	UserUsername           sql.NullString  `db:"user_username" json:"user_username"`
+	UserName               sql.NullString  `db:"user_name" json:"user_name"`
+	UserEmail              sql.NullString  `db:"user_email" json:"user_email"`
+	UserCreatedAt          sql.NullTime    `db:"user_created_at" json:"user_created_at"`
+	UserUpdatedAt          sql.NullTime    `db:"user_updated_at" json:"user_updated_at"`
+	UserLastSeenAt         sql.NullTime    `db:"user_last_seen_at" json:"user_last_seen_at"`
+	UserStatus             NullUserStatus  `db:"user_status" json:"user_status"`
+	UserLoginType          NullLoginType   `db:"user_login_type" json:"user_login_type"`
+	UserRoles              pq.StringArray  `db:"user_roles" json:"user_roles"`
+	UserAvatarUrl          sql.NullString  `db:"user_avatar_url" json:"user_avatar_url"`
+	UserDeleted            sql.NullBool    `db:"user_deleted" json:"user_deleted"`
+	UserThemePreference    sql.NullString  `db:"user_theme_preference" json:"user_theme_preference"`
+	UserQuietHoursSchedule sql.NullString  `db:"user_quiet_hours_schedule" json:"user_quiet_hours_schedule"`
+	Count                  int64           `db:"count" json:"count"`
 }
 
 // GetAuditLogsBefore retrieves `row_limit` number of audit logs before the provided
 // ID.
 func (q *sqlQuerier) GetAuditLogsOffset(ctx context.Context, arg GetAuditLogsOffsetParams) ([]GetAuditLogsOffsetRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAuditLogsOffset,
-		arg.Limit,
-		arg.Offset,
 		arg.ResourceType,
 		arg.ResourceID,
+		arg.OrganizationID,
 		arg.ResourceTarget,
 		arg.Action,
 		arg.UserID,
@@ -603,6 +628,8 @@ func (q *sqlQuerier) GetAuditLogsOffset(ctx context.Context, arg GetAuditLogsOff
 		arg.DateFrom,
 		arg.DateTo,
 		arg.BuildReason,
+		arg.OffsetOpt,
+		arg.LimitOpt,
 	)
 	if err != nil {
 		return nil, err
@@ -628,11 +655,18 @@ func (q *sqlQuerier) GetAuditLogsOffset(ctx context.Context, arg GetAuditLogsOff
 			&i.RequestID,
 			&i.ResourceIcon,
 			&i.UserUsername,
+			&i.UserName,
 			&i.UserEmail,
 			&i.UserCreatedAt,
+			&i.UserUpdatedAt,
+			&i.UserLastSeenAt,
 			&i.UserStatus,
+			&i.UserLoginType,
 			&i.UserRoles,
 			&i.UserAvatarUrl,
+			&i.UserDeleted,
+			&i.UserThemePreference,
+			&i.UserQuietHoursSchedule,
 			&i.Count,
 		); err != nil {
 			return nil, err
@@ -1289,6 +1323,33 @@ func (q *sqlQuerier) DeleteGroupMemberFromGroup(ctx context.Context, arg DeleteG
 }
 
 const getGroupMembers = `-- name: GetGroupMembers :many
+SELECT user_id, group_id FROM group_members
+`
+
+func (q *sqlQuerier) GetGroupMembers(ctx context.Context) ([]GroupMember, error) {
+	rows, err := q.db.QueryContext(ctx, getGroupMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GroupMember
+	for rows.Next() {
+		var i GroupMember
+		if err := rows.Scan(&i.UserID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getGroupMembersByGroupID = `-- name: GetGroupMembersByGroupID :many
 SELECT
 	users.id, users.email, users.username, users.hashed_password, users.created_at, users.updated_at, users.status, users.rbac_roles, users.login_type, users.avatar_url, users.deleted, users.last_seen_at, users.quiet_hours_schedule, users.theme_preference, users.name
 FROM
@@ -1314,8 +1375,8 @@ AND
 
 // If the group is a user made group, then we need to check the group_members table.
 // If it is the "Everyone" group, then we need to check the organization_members table.
-func (q *sqlQuerier) GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, getGroupMembers, groupID)
+func (q *sqlQuerier) GetGroupMembersByGroupID(ctx context.Context, groupID uuid.UUID) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, getGroupMembersByGroupID, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -1482,6 +1543,41 @@ func (q *sqlQuerier) GetGroupByOrgAndName(ctx context.Context, arg GetGroupByOrg
 		&i.Source,
 	)
 	return i, err
+}
+
+const getGroups = `-- name: GetGroups :many
+SELECT id, name, organization_id, avatar_url, quota_allowance, display_name, source FROM groups
+`
+
+func (q *sqlQuerier) GetGroups(ctx context.Context) ([]Group, error) {
+	rows, err := q.db.QueryContext(ctx, getGroups)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.OrganizationID,
+			&i.AvatarURL,
+			&i.QuotaAllowance,
+			&i.DisplayName,
+			&i.Source,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getGroupsByOrganizationAndUserID = `-- name: GetGroupsByOrganizationAndUserID :many
@@ -1805,7 +1901,7 @@ WITH
 			apps.slug,
 			apps.display_name,
 			apps.icon,
-			tus.app_usage_mins
+			(tus.app_usage_mins -> apps.slug)::smallint AS usage_mins
 		FROM
 			apps
 		JOIN
@@ -1829,13 +1925,35 @@ WITH
 			display_name,
 			icon,
 			-- See motivation in GetTemplateInsights for LEAST(SUM(n), 30).
-			LEAST(SUM(app_usage.value::smallint), 30) AS usage_mins
+			LEAST(SUM(usage_mins), 30) AS usage_mins
 		FROM
-			template_usage_stats_with_apps, jsonb_each(app_usage_mins) AS app_usage
-		WHERE
-			app_usage.key = slug
+			template_usage_stats_with_apps
 		GROUP BY
 			start_time, user_id, slug, display_name, icon
+	),
+	-- Analyze the users unique app usage across all templates. Count
+	-- usage across consecutive intervals as continuous usage.
+	times_used AS (
+		SELECT DISTINCT ON (user_id, slug, display_name, icon, uniq)
+			slug,
+			display_name,
+			icon,
+			-- Turn start_time into a unique identifier that identifies a users
+			-- continuous app usage. The value of uniq is otherwise garbage.
+			--
+			-- Since we're aggregating per user app usage across templates,
+			-- there can be duplicate start_times. To handle this, we use the
+			-- dense_rank() function, otherwise row_number() would suffice.
+			start_time - (
+				dense_rank() OVER (
+					PARTITION BY
+						user_id, slug, display_name, icon
+					ORDER BY
+						start_time
+				) * '30 minutes'::interval
+			) AS uniq
+		FROM
+			template_usage_stats_with_apps
 	),
 	-- Even though we allow identical apps to be aggregated across
 	-- templates, we still want to be able to report which templates
@@ -1858,7 +1976,17 @@ SELECT
 	ai.slug,
 	ai.display_name,
 	ai.icon,
-	(SUM(ai.usage_mins) * 60)::bigint AS usage_seconds
+	(SUM(ai.usage_mins) * 60)::bigint AS usage_seconds,
+	COALESCE((
+		SELECT
+			COUNT(*)
+		FROM
+			times_used
+		WHERE
+			times_used.slug = ai.slug
+			AND times_used.display_name = ai.display_name
+			AND times_used.icon = ai.icon
+	), 0)::bigint AS times_used
 FROM
 	app_insights AS ai
 JOIN
@@ -1884,6 +2012,7 @@ type GetTemplateAppInsightsRow struct {
 	DisplayName  string      `db:"display_name" json:"display_name"`
 	Icon         string      `db:"icon" json:"icon"`
 	UsageSeconds int64       `db:"usage_seconds" json:"usage_seconds"`
+	TimesUsed    int64       `db:"times_used" json:"times_used"`
 }
 
 // GetTemplateAppInsights returns the aggregate usage of each app in a given
@@ -1905,6 +2034,7 @@ func (q *sqlQuerier) GetTemplateAppInsights(ctx context.Context, arg GetTemplate
 			&i.DisplayName,
 			&i.Icon,
 			&i.UsageSeconds,
+			&i.TimesUsed,
 		); err != nil {
 			return nil, err
 		}
@@ -3158,6 +3288,297 @@ func (q *sqlQuerier) TryAcquireLock(ctx context.Context, pgTryAdvisoryXactLock i
 	return pg_try_advisory_xact_lock, err
 }
 
+const acquireNotificationMessages = `-- name: AcquireNotificationMessages :many
+WITH acquired AS (
+    UPDATE
+        notification_messages
+            SET updated_at = NOW(),
+                status = 'leased'::notification_message_status,
+                status_reason = 'Leased by notifier ' || $1::uuid,
+                leased_until = NOW() + CONCAT($2::int, ' seconds')::interval
+            WHERE id IN (SELECT nm.id
+                         FROM notification_messages AS nm
+                         WHERE (
+                             (
+                                 -- message is in acquirable states
+                                 nm.status IN (
+                                               'pending'::notification_message_status,
+                                               'temporary_failure'::notification_message_status
+                                     )
+                                 )
+                                 -- or somehow the message was left in leased for longer than its lease period
+                                 OR (
+                                 nm.status = 'leased'::notification_message_status
+                                     AND nm.leased_until < NOW()
+                                 )
+                             )
+                           AND (
+                             -- exclude all messages which have exceeded the max attempts; these will be purged later
+                             nm.attempt_count IS NULL OR nm.attempt_count < $3::int
+                             )
+                           -- if set, do not retry until we've exceeded the wait time
+                           AND (
+                             CASE
+                                 WHEN nm.next_retry_after IS NOT NULL THEN nm.next_retry_after < NOW()
+                                 ELSE true
+                                 END
+                             )
+                         ORDER BY nm.created_at ASC
+                                  -- Ensure that multiple concurrent readers cannot retrieve the same rows
+                             FOR UPDATE OF nm
+                                 SKIP LOCKED
+                         LIMIT $4)
+            RETURNING id, notification_template_id, user_id, method, status, status_reason, created_by, payload, attempt_count, targets, created_at, updated_at, leased_until, next_retry_after)
+SELECT
+    -- message
+    nm.id,
+    nm.payload,
+    nm.method,
+    nm.created_by,
+    -- template
+    nt.title_template,
+    nt.body_template
+FROM acquired nm
+         JOIN notification_templates nt ON nm.notification_template_id = nt.id
+`
+
+type AcquireNotificationMessagesParams struct {
+	NotifierID      uuid.UUID `db:"notifier_id" json:"notifier_id"`
+	LeaseSeconds    int32     `db:"lease_seconds" json:"lease_seconds"`
+	MaxAttemptCount int32     `db:"max_attempt_count" json:"max_attempt_count"`
+	Count           int32     `db:"count" json:"count"`
+}
+
+type AcquireNotificationMessagesRow struct {
+	ID            uuid.UUID          `db:"id" json:"id"`
+	Payload       json.RawMessage    `db:"payload" json:"payload"`
+	Method        NotificationMethod `db:"method" json:"method"`
+	CreatedBy     string             `db:"created_by" json:"created_by"`
+	TitleTemplate string             `db:"title_template" json:"title_template"`
+	BodyTemplate  string             `db:"body_template" json:"body_template"`
+}
+
+// Acquires the lease for a given count of notification messages, to enable concurrent dequeuing and subsequent sending.
+// Only rows that aren't already leased (or ones which are leased but have exceeded their lease period) are returned.
+//
+// A "lease" here refers to a notifier taking ownership of a notification_messages row. A lease survives for the duration
+// of CODER_NOTIFICATIONS_LEASE_PERIOD. Once a message is delivered, its status is updated and the lease expires (set to NULL).
+// If a message exceeds its lease, that implies the notifier did not shutdown cleanly, or the table update failed somehow,
+// and the row will then be eligible to be dequeued by another notifier.
+//
+// SKIP LOCKED is used to jump over locked rows. This prevents multiple notifiers from acquiring the same messages.
+// See: https://www.postgresql.org/docs/9.5/sql-select.html#SQL-FOR-UPDATE-SHARE
+func (q *sqlQuerier) AcquireNotificationMessages(ctx context.Context, arg AcquireNotificationMessagesParams) ([]AcquireNotificationMessagesRow, error) {
+	rows, err := q.db.QueryContext(ctx, acquireNotificationMessages,
+		arg.NotifierID,
+		arg.LeaseSeconds,
+		arg.MaxAttemptCount,
+		arg.Count,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AcquireNotificationMessagesRow
+	for rows.Next() {
+		var i AcquireNotificationMessagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Payload,
+			&i.Method,
+			&i.CreatedBy,
+			&i.TitleTemplate,
+			&i.BodyTemplate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const bulkMarkNotificationMessagesFailed = `-- name: BulkMarkNotificationMessagesFailed :execrows
+UPDATE notification_messages
+SET updated_at       = subquery.failed_at,
+    attempt_count    = attempt_count + 1,
+    status           = CASE
+                           WHEN attempt_count + 1 < $1::int THEN subquery.status
+                           ELSE 'permanent_failure'::notification_message_status END,
+    status_reason    = subquery.status_reason,
+    leased_until     = NULL,
+    next_retry_after = CASE
+                           WHEN (attempt_count + 1 < $1::int)
+                               THEN NOW() + CONCAT($2::int, ' seconds')::interval END
+FROM (SELECT UNNEST($3::uuid[])                             AS id,
+             UNNEST($4::timestamptz[])               AS failed_at,
+             UNNEST($5::notification_message_status[]) AS status,
+             UNNEST($6::text[])                  AS status_reason) AS subquery
+WHERE notification_messages.id = subquery.id
+`
+
+type BulkMarkNotificationMessagesFailedParams struct {
+	MaxAttempts   int32                       `db:"max_attempts" json:"max_attempts"`
+	RetryInterval int32                       `db:"retry_interval" json:"retry_interval"`
+	IDs           []uuid.UUID                 `db:"ids" json:"ids"`
+	FailedAts     []time.Time                 `db:"failed_ats" json:"failed_ats"`
+	Statuses      []NotificationMessageStatus `db:"statuses" json:"statuses"`
+	StatusReasons []string                    `db:"status_reasons" json:"status_reasons"`
+}
+
+func (q *sqlQuerier) BulkMarkNotificationMessagesFailed(ctx context.Context, arg BulkMarkNotificationMessagesFailedParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, bulkMarkNotificationMessagesFailed,
+		arg.MaxAttempts,
+		arg.RetryInterval,
+		pq.Array(arg.IDs),
+		pq.Array(arg.FailedAts),
+		pq.Array(arg.Statuses),
+		pq.Array(arg.StatusReasons),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const bulkMarkNotificationMessagesSent = `-- name: BulkMarkNotificationMessagesSent :execrows
+UPDATE notification_messages
+SET updated_at       = new_values.sent_at,
+    attempt_count    = attempt_count + 1,
+    status           = 'sent'::notification_message_status,
+    status_reason    = NULL,
+    leased_until     = NULL,
+    next_retry_after = NULL
+FROM (SELECT UNNEST($1::uuid[])        AS id,
+             UNNEST($2::timestamptz[]) AS sent_at)
+         AS new_values
+WHERE notification_messages.id = new_values.id
+`
+
+type BulkMarkNotificationMessagesSentParams struct {
+	IDs     []uuid.UUID `db:"ids" json:"ids"`
+	SentAts []time.Time `db:"sent_ats" json:"sent_ats"`
+}
+
+func (q *sqlQuerier) BulkMarkNotificationMessagesSent(ctx context.Context, arg BulkMarkNotificationMessagesSentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, bulkMarkNotificationMessagesSent, pq.Array(arg.IDs), pq.Array(arg.SentAts))
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteOldNotificationMessages = `-- name: DeleteOldNotificationMessages :exec
+DELETE
+FROM notification_messages
+WHERE id IN
+      (SELECT id
+       FROM notification_messages AS nested
+       WHERE nested.updated_at < NOW() - INTERVAL '7 days')
+`
+
+// Delete all notification messages which have not been updated for over a week.
+func (q *sqlQuerier) DeleteOldNotificationMessages(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteOldNotificationMessages)
+	return err
+}
+
+const enqueueNotificationMessage = `-- name: EnqueueNotificationMessage :one
+INSERT INTO notification_messages (id, notification_template_id, user_id, method, payload, targets, created_by)
+VALUES ($1,
+        $2,
+        $3,
+        $4::notification_method,
+        $5::jsonb,
+        $6,
+        $7)
+RETURNING id, notification_template_id, user_id, method, status, status_reason, created_by, payload, attempt_count, targets, created_at, updated_at, leased_until, next_retry_after
+`
+
+type EnqueueNotificationMessageParams struct {
+	ID                     uuid.UUID          `db:"id" json:"id"`
+	NotificationTemplateID uuid.UUID          `db:"notification_template_id" json:"notification_template_id"`
+	UserID                 uuid.UUID          `db:"user_id" json:"user_id"`
+	Method                 NotificationMethod `db:"method" json:"method"`
+	Payload                json.RawMessage    `db:"payload" json:"payload"`
+	Targets                []uuid.UUID        `db:"targets" json:"targets"`
+	CreatedBy              string             `db:"created_by" json:"created_by"`
+}
+
+func (q *sqlQuerier) EnqueueNotificationMessage(ctx context.Context, arg EnqueueNotificationMessageParams) (NotificationMessage, error) {
+	row := q.db.QueryRowContext(ctx, enqueueNotificationMessage,
+		arg.ID,
+		arg.NotificationTemplateID,
+		arg.UserID,
+		arg.Method,
+		arg.Payload,
+		pq.Array(arg.Targets),
+		arg.CreatedBy,
+	)
+	var i NotificationMessage
+	err := row.Scan(
+		&i.ID,
+		&i.NotificationTemplateID,
+		&i.UserID,
+		&i.Method,
+		&i.Status,
+		&i.StatusReason,
+		&i.CreatedBy,
+		&i.Payload,
+		&i.AttemptCount,
+		pq.Array(&i.Targets),
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LeasedUntil,
+		&i.NextRetryAfter,
+	)
+	return i, err
+}
+
+const fetchNewMessageMetadata = `-- name: FetchNewMessageMetadata :one
+SELECT nt.name                                                    AS notification_name,
+       nt.actions                                                 AS actions,
+       u.id                                                       AS user_id,
+       u.email                                                    AS user_email,
+       COALESCE(NULLIF(u.name, ''), NULLIF(u.username, ''))::text AS user_name
+FROM notification_templates nt,
+     users u
+WHERE nt.id = $1
+  AND u.id = $2
+`
+
+type FetchNewMessageMetadataParams struct {
+	NotificationTemplateID uuid.UUID `db:"notification_template_id" json:"notification_template_id"`
+	UserID                 uuid.UUID `db:"user_id" json:"user_id"`
+}
+
+type FetchNewMessageMetadataRow struct {
+	NotificationName string    `db:"notification_name" json:"notification_name"`
+	Actions          []byte    `db:"actions" json:"actions"`
+	UserID           uuid.UUID `db:"user_id" json:"user_id"`
+	UserEmail        string    `db:"user_email" json:"user_email"`
+	UserName         string    `db:"user_name" json:"user_name"`
+}
+
+// This is used to build up the notification_message's JSON payload.
+func (q *sqlQuerier) FetchNewMessageMetadata(ctx context.Context, arg FetchNewMessageMetadataParams) (FetchNewMessageMetadataRow, error) {
+	row := q.db.QueryRowContext(ctx, fetchNewMessageMetadata, arg.NotificationTemplateID, arg.UserID)
+	var i FetchNewMessageMetadataRow
+	err := row.Scan(
+		&i.NotificationName,
+		&i.Actions,
+		&i.UserID,
+		&i.UserEmail,
+		&i.UserName,
+	)
+	return i, err
+}
+
 const deleteOAuth2ProviderAppByID = `-- name: DeleteOAuth2ProviderAppByID :exec
 DELETE FROM oauth2_provider_apps WHERE id = $1
 `
@@ -3722,6 +4143,25 @@ func (q *sqlQuerier) UpdateOAuth2ProviderAppSecretByID(ctx context.Context, arg 
 	return i, err
 }
 
+const deleteOrganizationMember = `-- name: DeleteOrganizationMember :exec
+DELETE
+	FROM
+		organization_members
+	WHERE
+		organization_id = $1 AND
+		user_id = $2
+`
+
+type DeleteOrganizationMemberParams struct {
+	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
+	UserID         uuid.UUID `db:"user_id" json:"user_id"`
+}
+
+func (q *sqlQuerier) DeleteOrganizationMember(ctx context.Context, arg DeleteOrganizationMemberParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOrganizationMember, arg.OrganizationID, arg.UserID)
+	return err
+}
+
 const getOrganizationIDsByMemberIDs = `-- name: GetOrganizationIDsByMemberIDs :many
 SELECT
     user_id, array_agg(organization_id) :: uuid [ ] AS "organization_IDs"
@@ -3748,74 +4188,6 @@ func (q *sqlQuerier) GetOrganizationIDsByMemberIDs(ctx context.Context, ids []uu
 	for rows.Next() {
 		var i GetOrganizationIDsByMemberIDsRow
 		if err := rows.Scan(&i.UserID, pq.Array(&i.OrganizationIDs)); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getOrganizationMemberByUserID = `-- name: GetOrganizationMemberByUserID :one
-SELECT
-	user_id, organization_id, created_at, updated_at, roles
-FROM
-	organization_members
-WHERE
-	organization_id = $1
-	AND user_id = $2
-LIMIT
-	1
-`
-
-type GetOrganizationMemberByUserIDParams struct {
-	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
-	UserID         uuid.UUID `db:"user_id" json:"user_id"`
-}
-
-func (q *sqlQuerier) GetOrganizationMemberByUserID(ctx context.Context, arg GetOrganizationMemberByUserIDParams) (OrganizationMember, error) {
-	row := q.db.QueryRowContext(ctx, getOrganizationMemberByUserID, arg.OrganizationID, arg.UserID)
-	var i OrganizationMember
-	err := row.Scan(
-		&i.UserID,
-		&i.OrganizationID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		pq.Array(&i.Roles),
-	)
-	return i, err
-}
-
-const getOrganizationMembershipsByUserID = `-- name: GetOrganizationMembershipsByUserID :many
-SELECT
-	user_id, organization_id, created_at, updated_at, roles
-FROM
-	organization_members
-WHERE
-  user_id = $1
-`
-
-func (q *sqlQuerier) GetOrganizationMembershipsByUserID(ctx context.Context, userID uuid.UUID) ([]OrganizationMember, error) {
-	rows, err := q.db.QueryContext(ctx, getOrganizationMembershipsByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []OrganizationMember
-	for rows.Next() {
-		var i OrganizationMember
-		if err := rows.Scan(
-			&i.UserID,
-			&i.OrganizationID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			pq.Array(&i.Roles),
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -3869,6 +4241,73 @@ func (q *sqlQuerier) InsertOrganizationMember(ctx context.Context, arg InsertOrg
 	return i, err
 }
 
+const organizationMembers = `-- name: OrganizationMembers :many
+SELECT
+	organization_members.user_id, organization_members.organization_id, organization_members.created_at, organization_members.updated_at, organization_members.roles,
+	users.username
+FROM
+	organization_members
+		INNER JOIN
+	users ON organization_members.user_id = users.id
+WHERE
+	-- Filter by organization id
+	CASE
+		WHEN $1 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			organization_id = $1
+		ELSE true
+	END
+	-- Filter by user id
+	AND CASE
+		WHEN $2 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid THEN
+			user_id = $2
+		ELSE true
+	END
+`
+
+type OrganizationMembersParams struct {
+	OrganizationID uuid.UUID `db:"organization_id" json:"organization_id"`
+	UserID         uuid.UUID `db:"user_id" json:"user_id"`
+}
+
+type OrganizationMembersRow struct {
+	OrganizationMember OrganizationMember `db:"organization_member" json:"organization_member"`
+	Username           string             `db:"username" json:"username"`
+}
+
+// Arguments are optional with uuid.Nil to ignore.
+//   - Use just 'organization_id' to get all members of an org
+//   - Use just 'user_id' to get all orgs a user is a member of
+//   - Use both to get a specific org member row
+func (q *sqlQuerier) OrganizationMembers(ctx context.Context, arg OrganizationMembersParams) ([]OrganizationMembersRow, error) {
+	rows, err := q.db.QueryContext(ctx, organizationMembers, arg.OrganizationID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OrganizationMembersRow
+	for rows.Next() {
+		var i OrganizationMembersRow
+		if err := rows.Scan(
+			&i.OrganizationMember.UserID,
+			&i.OrganizationMember.OrganizationID,
+			&i.OrganizationMember.CreatedAt,
+			&i.OrganizationMember.UpdatedAt,
+			pq.Array(&i.OrganizationMember.Roles),
+			&i.Username,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateMemberRoles = `-- name: UpdateMemberRoles :one
 UPDATE
 	organization_members
@@ -3900,9 +4339,22 @@ func (q *sqlQuerier) UpdateMemberRoles(ctx context.Context, arg UpdateMemberRole
 	return i, err
 }
 
+const deleteOrganization = `-- name: DeleteOrganization :exec
+DELETE FROM
+	organizations
+WHERE
+	id = $1 AND
+	is_default = false
+`
+
+func (q *sqlQuerier) DeleteOrganization(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteOrganization, id)
+	return err
+}
+
 const getDefaultOrganization = `-- name: GetDefaultOrganization :one
 SELECT
-	id, name, description, created_at, updated_at, is_default
+	id, name, description, created_at, updated_at, is_default, display_name, icon
 FROM
 	organizations
 WHERE
@@ -3921,13 +4373,15 @@ func (q *sqlQuerier) GetDefaultOrganization(ctx context.Context) (Organization, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsDefault,
+		&i.DisplayName,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
 SELECT
-	id, name, description, created_at, updated_at, is_default
+	id, name, description, created_at, updated_at, is_default, display_name, icon
 FROM
 	organizations
 WHERE
@@ -3944,13 +4398,15 @@ func (q *sqlQuerier) GetOrganizationByID(ctx context.Context, id uuid.UUID) (Org
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsDefault,
+		&i.DisplayName,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const getOrganizationByName = `-- name: GetOrganizationByName :one
 SELECT
-	id, name, description, created_at, updated_at, is_default
+	id, name, description, created_at, updated_at, is_default, display_name, icon
 FROM
 	organizations
 WHERE
@@ -3969,13 +4425,15 @@ func (q *sqlQuerier) GetOrganizationByName(ctx context.Context, name string) (Or
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsDefault,
+		&i.DisplayName,
+		&i.Icon,
 	)
 	return i, err
 }
 
 const getOrganizations = `-- name: GetOrganizations :many
 SELECT
-	id, name, description, created_at, updated_at, is_default
+	id, name, description, created_at, updated_at, is_default, display_name, icon
 FROM
 	organizations
 `
@@ -3996,6 +4454,8 @@ func (q *sqlQuerier) GetOrganizations(ctx context.Context) ([]Organization, erro
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsDefault,
+			&i.DisplayName,
+			&i.Icon,
 		); err != nil {
 			return nil, err
 		}
@@ -4012,7 +4472,7 @@ func (q *sqlQuerier) GetOrganizations(ctx context.Context) ([]Organization, erro
 
 const getOrganizationsByUserID = `-- name: GetOrganizationsByUserID :many
 SELECT
-	id, name, description, created_at, updated_at, is_default
+	id, name, description, created_at, updated_at, is_default, display_name, icon
 FROM
 	organizations
 WHERE
@@ -4042,6 +4502,8 @@ func (q *sqlQuerier) GetOrganizationsByUserID(ctx context.Context, userID uuid.U
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsDefault,
+			&i.DisplayName,
+			&i.Icon,
 		); err != nil {
 			return nil, err
 		}
@@ -4058,16 +4520,18 @@ func (q *sqlQuerier) GetOrganizationsByUserID(ctx context.Context, userID uuid.U
 
 const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO
-	organizations (id, "name", description, created_at, updated_at, is_default)
+	organizations (id, "name", display_name, description, icon, created_at, updated_at, is_default)
 VALUES
 	-- If no organizations exist, and this is the first, make it the default.
-	($1, $2, $3, $4, $5, (SELECT TRUE FROM organizations LIMIT 1) IS NULL) RETURNING id, name, description, created_at, updated_at, is_default
+	($1, $2, $3, $4, $5, $6, $7, (SELECT TRUE FROM organizations LIMIT 1) IS NULL) RETURNING id, name, description, created_at, updated_at, is_default, display_name, icon
 `
 
 type InsertOrganizationParams struct {
 	ID          uuid.UUID `db:"id" json:"id"`
 	Name        string    `db:"name" json:"name"`
+	DisplayName string    `db:"display_name" json:"display_name"`
 	Description string    `db:"description" json:"description"`
+	Icon        string    `db:"icon" json:"icon"`
 	CreatedAt   time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
 }
@@ -4076,7 +4540,9 @@ func (q *sqlQuerier) InsertOrganization(ctx context.Context, arg InsertOrganizat
 	row := q.db.QueryRowContext(ctx, insertOrganization,
 		arg.ID,
 		arg.Name,
+		arg.DisplayName,
 		arg.Description,
+		arg.Icon,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -4088,6 +4554,54 @@ func (q *sqlQuerier) InsertOrganization(ctx context.Context, arg InsertOrganizat
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsDefault,
+		&i.DisplayName,
+		&i.Icon,
+	)
+	return i, err
+}
+
+const updateOrganization = `-- name: UpdateOrganization :one
+UPDATE
+	organizations
+SET
+	updated_at = $1,
+	name = $2,
+	display_name = $3,
+	description = $4,
+	icon = $5
+WHERE
+	id = $6
+RETURNING id, name, description, created_at, updated_at, is_default, display_name, icon
+`
+
+type UpdateOrganizationParams struct {
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+	Name        string    `db:"name" json:"name"`
+	DisplayName string    `db:"display_name" json:"display_name"`
+	Description string    `db:"description" json:"description"`
+	Icon        string    `db:"icon" json:"icon"`
+	ID          uuid.UUID `db:"id" json:"id"`
+}
+
+func (q *sqlQuerier) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
+	row := q.db.QueryRowContext(ctx, updateOrganization,
+		arg.UpdatedAt,
+		arg.Name,
+		arg.DisplayName,
+		arg.Description,
+		arg.Icon,
+		arg.ID,
+	)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsDefault,
+		&i.DisplayName,
+		&i.Icon,
 	)
 	return i, err
 }
@@ -5519,6 +6033,149 @@ func (q *sqlQuerier) UpdateReplica(ctx context.Context, arg UpdateReplicaParams)
 	return i, err
 }
 
+const customRoles = `-- name: CustomRoles :many
+SELECT
+	name, display_name, site_permissions, org_permissions, user_permissions, created_at, updated_at, organization_id, id
+FROM
+	custom_roles
+WHERE
+  true
+  -- @lookup_roles will filter for exact (role_name, org_id) pairs
+  -- To do this manually in SQL, you can construct an array and cast it:
+  -- cast(ARRAY[('customrole','ece79dac-926e-44ca-9790-2ff7c5eb6e0c')] AS name_organization_pair[])
+  AND CASE WHEN array_length($1 :: name_organization_pair[], 1) > 0  THEN
+    -- Using 'coalesce' to avoid troubles with null literals being an empty string.
+	(name, coalesce(organization_id, '00000000-0000-0000-0000-000000000000' ::uuid)) = ANY ($1::name_organization_pair[])
+    ELSE true
+  END
+  -- This allows fetching all roles, or just site wide roles
+  AND CASE WHEN $2 :: boolean  THEN
+	organization_id IS null
+	ELSE true
+  END
+  -- Allows fetching all roles to a particular organization
+  AND CASE WHEN $3 :: uuid != '00000000-0000-0000-0000-000000000000'::uuid  THEN
+      organization_id = $3
+    ELSE true
+  END
+`
+
+type CustomRolesParams struct {
+	LookupRoles     []NameOrganizationPair `db:"lookup_roles" json:"lookup_roles"`
+	ExcludeOrgRoles bool                   `db:"exclude_org_roles" json:"exclude_org_roles"`
+	OrganizationID  uuid.UUID              `db:"organization_id" json:"organization_id"`
+}
+
+func (q *sqlQuerier) CustomRoles(ctx context.Context, arg CustomRolesParams) ([]CustomRole, error) {
+	rows, err := q.db.QueryContext(ctx, customRoles, pq.Array(arg.LookupRoles), arg.ExcludeOrgRoles, arg.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CustomRole
+	for rows.Next() {
+		var i CustomRole
+		if err := rows.Scan(
+			&i.Name,
+			&i.DisplayName,
+			&i.SitePermissions,
+			&i.OrgPermissions,
+			&i.UserPermissions,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.OrganizationID,
+			&i.ID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const upsertCustomRole = `-- name: UpsertCustomRole :one
+INSERT INTO
+	custom_roles (
+	    name,
+	    display_name,
+	    organization_id,
+	    site_permissions,
+	    org_permissions,
+	    user_permissions,
+	    created_at,
+		updated_at
+)
+VALUES (
+        -- Always force lowercase names
+        lower($1),
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        now(),
+        now()
+	   )
+ON CONFLICT (name)
+	DO UPDATE SET
+	display_name = $2,
+	site_permissions = $4,
+	org_permissions = $5,
+	user_permissions = $6,
+	updated_at = now()
+RETURNING name, display_name, site_permissions, org_permissions, user_permissions, created_at, updated_at, organization_id, id
+`
+
+type UpsertCustomRoleParams struct {
+	Name            string                `db:"name" json:"name"`
+	DisplayName     string                `db:"display_name" json:"display_name"`
+	OrganizationID  uuid.NullUUID         `db:"organization_id" json:"organization_id"`
+	SitePermissions CustomRolePermissions `db:"site_permissions" json:"site_permissions"`
+	OrgPermissions  CustomRolePermissions `db:"org_permissions" json:"org_permissions"`
+	UserPermissions CustomRolePermissions `db:"user_permissions" json:"user_permissions"`
+}
+
+func (q *sqlQuerier) UpsertCustomRole(ctx context.Context, arg UpsertCustomRoleParams) (CustomRole, error) {
+	row := q.db.QueryRowContext(ctx, upsertCustomRole,
+		arg.Name,
+		arg.DisplayName,
+		arg.OrganizationID,
+		arg.SitePermissions,
+		arg.OrgPermissions,
+		arg.UserPermissions,
+	)
+	var i CustomRole
+	err := row.Scan(
+		&i.Name,
+		&i.DisplayName,
+		&i.SitePermissions,
+		&i.OrgPermissions,
+		&i.UserPermissions,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OrganizationID,
+		&i.ID,
+	)
+	return i, err
+}
+
+const getAnnouncementBanners = `-- name: GetAnnouncementBanners :one
+SELECT value FROM site_configs WHERE key = 'announcement_banners'
+`
+
+func (q *sqlQuerier) GetAnnouncementBanners(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, getAnnouncementBanners)
+	var value string
+	err := row.Scan(&value)
+	return value, err
+}
+
 const getAppSecurityKey = `-- name: GetAppSecurityKey :one
 SELECT value FROM site_configs WHERE key = 'app_signing_key'
 `
@@ -5615,17 +6272,6 @@ func (q *sqlQuerier) GetLogoURL(ctx context.Context) (string, error) {
 	return value, err
 }
 
-const getNotificationBanners = `-- name: GetNotificationBanners :one
-SELECT value FROM site_configs WHERE key = 'notification_banners'
-`
-
-func (q *sqlQuerier) GetNotificationBanners(ctx context.Context) (string, error) {
-	row := q.db.QueryRowContext(ctx, getNotificationBanners)
-	var value string
-	err := row.Scan(&value)
-	return value, err
-}
-
 const getOAuthSigningKey = `-- name: GetOAuthSigningKey :one
 SELECT value FROM site_configs WHERE key = 'oauth_signing_key'
 `
@@ -5652,6 +6298,16 @@ INSERT INTO site_configs (key, value) VALUES ('deployment_id', $1)
 
 func (q *sqlQuerier) InsertDeploymentID(ctx context.Context, value string) error {
 	_, err := q.db.ExecContext(ctx, insertDeploymentID, value)
+	return err
+}
+
+const upsertAnnouncementBanners = `-- name: UpsertAnnouncementBanners :exec
+INSERT INTO site_configs (key, value) VALUES ('announcement_banners', $1)
+ON CONFLICT (key) DO UPDATE SET value = $1 WHERE site_configs.key = 'announcement_banners'
+`
+
+func (q *sqlQuerier) UpsertAnnouncementBanners(ctx context.Context, value string) error {
+	_, err := q.db.ExecContext(ctx, upsertAnnouncementBanners, value)
 	return err
 }
 
@@ -5725,16 +6381,6 @@ ON CONFLICT (key) DO UPDATE SET value = $1 WHERE site_configs.key = 'logo_url'
 
 func (q *sqlQuerier) UpsertLogoURL(ctx context.Context, value string) error {
 	_, err := q.db.ExecContext(ctx, upsertLogoURL, value)
-	return err
-}
-
-const upsertNotificationBanners = `-- name: UpsertNotificationBanners :exec
-INSERT INTO site_configs (key, value) VALUES ('notification_banners', $1)
-ON CONFLICT (key) DO UPDATE SET value = $1 WHERE site_configs.key = 'notification_banners'
-`
-
-func (q *sqlQuerier) UpsertNotificationBanners(ctx context.Context, value string) error {
-	_, err := q.db.ExecContext(ctx, upsertNotificationBanners, value)
 	return err
 }
 
@@ -6532,9 +7178,9 @@ func (q *sqlQuerier) GetTemplateAverageBuildTime(ctx context.Context, arg GetTem
 
 const getTemplateByID = `-- name: GetTemplateByID :one
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username, organization_name
 FROM
-	template_with_users
+	template_with_names
 WHERE
 	id = $1
 LIMIT
@@ -6575,15 +7221,16 @@ func (q *sqlQuerier) GetTemplateByID(ctx context.Context, id uuid.UUID) (Templat
 		&i.MaxPortSharingLevel,
 		&i.CreatedByAvatarURL,
 		&i.CreatedByUsername,
+		&i.OrganizationName,
 	)
 	return i, err
 }
 
 const getTemplateByOrganizationAndName = `-- name: GetTemplateByOrganizationAndName :one
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username, organization_name
 FROM
-	template_with_users AS templates
+	template_with_names AS templates
 WHERE
 	organization_id = $1
 	AND deleted = $2
@@ -6632,12 +7279,13 @@ func (q *sqlQuerier) GetTemplateByOrganizationAndName(ctx context.Context, arg G
 		&i.MaxPortSharingLevel,
 		&i.CreatedByAvatarURL,
 		&i.CreatedByUsername,
+		&i.OrganizationName,
 	)
 	return i, err
 }
 
 const getTemplates = `-- name: GetTemplates :many
-SELECT id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username FROM template_with_users AS templates
+SELECT id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username, organization_name FROM template_with_names AS templates
 ORDER BY (name, id) ASC
 `
 
@@ -6681,6 +7329,7 @@ func (q *sqlQuerier) GetTemplates(ctx context.Context) ([]Template, error) {
 			&i.MaxPortSharingLevel,
 			&i.CreatedByAvatarURL,
 			&i.CreatedByUsername,
+			&i.OrganizationName,
 		); err != nil {
 			return nil, err
 		}
@@ -6697,9 +7346,9 @@ func (q *sqlQuerier) GetTemplates(ctx context.Context) ([]Template, error) {
 
 const getTemplatesWithFilter = `-- name: GetTemplatesWithFilter :many
 SELECT
-	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username
+	id, created_at, updated_at, organization_id, deleted, name, provisioner, active_version_id, description, default_ttl, created_by, icon, user_acl, group_acl, display_name, allow_user_cancel_workspace_jobs, allow_user_autostart, allow_user_autostop, failure_ttl, time_til_dormant, time_til_dormant_autodelete, autostop_requirement_days_of_week, autostop_requirement_weeks, autostart_block_days_of_week, require_active_version, deprecated, activity_bump, max_port_sharing_level, created_by_avatar_url, created_by_username, organization_name
 FROM
-	template_with_users AS templates
+	template_with_names AS templates
 WHERE
 	-- Optionally include deleted templates
 	templates.deleted = $1
@@ -6791,6 +7440,7 @@ func (q *sqlQuerier) GetTemplatesWithFilter(ctx context.Context, arg GetTemplate
 			&i.MaxPortSharingLevel,
 			&i.CreatedByAvatarURL,
 			&i.CreatedByUsername,
+			&i.OrganizationName,
 		); err != nil {
 			return nil, err
 		}
@@ -7876,6 +8526,61 @@ func (q *sqlQuerier) InsertTemplateVersionVariable(ctx context.Context, arg Inse
 	return i, err
 }
 
+const getTemplateVersionWorkspaceTags = `-- name: GetTemplateVersionWorkspaceTags :many
+SELECT template_version_id, key, value FROM template_version_workspace_tags WHERE template_version_id = $1 ORDER BY LOWER(key) ASC
+`
+
+func (q *sqlQuerier) GetTemplateVersionWorkspaceTags(ctx context.Context, templateVersionID uuid.UUID) ([]TemplateVersionWorkspaceTag, error) {
+	rows, err := q.db.QueryContext(ctx, getTemplateVersionWorkspaceTags, templateVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TemplateVersionWorkspaceTag
+	for rows.Next() {
+		var i TemplateVersionWorkspaceTag
+		if err := rows.Scan(&i.TemplateVersionID, &i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertTemplateVersionWorkspaceTag = `-- name: InsertTemplateVersionWorkspaceTag :one
+INSERT INTO
+    template_version_workspace_tags (
+        template_version_id,
+        key,
+        value
+    )
+VALUES
+    (
+        $1,
+        $2,
+        $3
+    ) RETURNING template_version_id, key, value
+`
+
+type InsertTemplateVersionWorkspaceTagParams struct {
+	TemplateVersionID uuid.UUID `db:"template_version_id" json:"template_version_id"`
+	Key               string    `db:"key" json:"key"`
+	Value             string    `db:"value" json:"value"`
+}
+
+func (q *sqlQuerier) InsertTemplateVersionWorkspaceTag(ctx context.Context, arg InsertTemplateVersionWorkspaceTagParams) (TemplateVersionWorkspaceTag, error) {
+	row := q.db.QueryRowContext(ctx, insertTemplateVersionWorkspaceTag, arg.TemplateVersionID, arg.Key, arg.Value)
+	var i TemplateVersionWorkspaceTag
+	err := row.Scan(&i.TemplateVersionID, &i.Key, &i.Value)
+	return i, err
+}
+
 const getUserLinkByLinkedID = `-- name: GetUserLinkByLinkedID :one
 SELECT
 	user_links.user_id, user_links.login_type, user_links.linked_id, user_links.oauth_access_token, user_links.oauth_refresh_token, user_links.oauth_expiry, user_links.oauth_access_token_key_id, user_links.oauth_refresh_token_key_id, user_links.debug_context
@@ -8169,12 +8874,14 @@ SELECT
 		array_append(users.rbac_roles, 'member'),
 		(
 			SELECT
-				array_agg(org_roles)
+				-- The roles are returned as a flat array, org scoped and site side.
+				-- Concatenating the organization id scopes the organization roles.
+				array_agg(org_roles || ':' || organization_members.organization_id::text)
 			FROM
 				organization_members,
-				-- All org_members get the org-member role for their orgs
+				-- All org_members get the organization-member role for their orgs
 				unnest(
-					array_append(roles, 'organization-member:' || organization_members.organization_id::text)
+					array_append(roles, 'organization-member')
 				) AS org_roles
 			WHERE
 				user_id = users.id
@@ -8516,6 +9223,7 @@ INSERT INTO
 		id,
 		email,
 		username,
+		name,
 		hashed_password,
 		created_at,
 		updated_at,
@@ -8523,13 +9231,14 @@ INSERT INTO
 		login_type
 	)
 VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, email, username, hashed_password, created_at, updated_at, status, rbac_roles, login_type, avatar_url, deleted, last_seen_at, quiet_hours_schedule, theme_preference, name
+	($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, email, username, hashed_password, created_at, updated_at, status, rbac_roles, login_type, avatar_url, deleted, last_seen_at, quiet_hours_schedule, theme_preference, name
 `
 
 type InsertUserParams struct {
 	ID             uuid.UUID      `db:"id" json:"id"`
 	Email          string         `db:"email" json:"email"`
 	Username       string         `db:"username" json:"username"`
+	Name           string         `db:"name" json:"name"`
 	HashedPassword []byte         `db:"hashed_password" json:"hashed_password"`
 	CreatedAt      time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt      time.Time      `db:"updated_at" json:"updated_at"`
@@ -8542,6 +9251,7 @@ func (q *sqlQuerier) InsertUser(ctx context.Context, arg InsertUserParams) (User
 		arg.ID,
 		arg.Email,
 		arg.Username,
+		arg.Name,
 		arg.HashedPassword,
 		arg.CreatedAt,
 		arg.UpdatedAt,

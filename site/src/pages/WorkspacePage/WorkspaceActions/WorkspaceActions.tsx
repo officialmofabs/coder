@@ -1,10 +1,11 @@
 import DeleteIcon from "@mui/icons-material/DeleteOutlined";
+import DownloadOutlined from "@mui/icons-material/DownloadOutlined";
 import DuplicateIcon from "@mui/icons-material/FileCopyOutlined";
 import HistoryIcon from "@mui/icons-material/HistoryOutlined";
 import MoreVertOutlined from "@mui/icons-material/MoreVertOutlined";
 import SettingsIcon from "@mui/icons-material/SettingsOutlined";
 import Divider from "@mui/material/Divider";
-import { type FC, type ReactNode, Fragment } from "react";
+import { type FC, type ReactNode, Fragment, useState } from "react";
 import type { Workspace, WorkspaceBuildParameter } from "api/typesGenerated";
 import { TopbarIconButton } from "components/FullPageLayout/Topbar";
 import {
@@ -24,9 +25,12 @@ import {
   UpdateButton,
   ActivateButton,
   FavoriteButton,
+  UpdateAndStartButton,
+  UpdateAndRestartButton,
 } from "./Buttons";
 import { type ActionType, abilitiesByWorkspaceStatus } from "./constants";
 import { DebugButton } from "./DebugButton";
+import { DownloadLogsDialog } from "./DownloadLogsDialog";
 import { RetryButton } from "./RetryButton";
 
 export interface WorkspaceActionsProps {
@@ -74,6 +78,8 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
   const { duplicateWorkspace, isDuplicationReady } =
     useWorkspaceDuplication(workspace);
 
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+
   const { actions, canCancel, canAcceptJobs } = abilitiesByWorkspaceStatus(
     workspace,
     canDebug,
@@ -84,11 +90,12 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
 
   const mustUpdate = mustUpdateWorkspace(workspace, canChangeVersions);
   const tooltipText = getTooltipText(workspace, mustUpdate, canChangeVersions);
-  const canBeUpdated = workspace.outdated && canAcceptJobs;
 
   // A mapping of button type to the corresponding React component
   const buttonMapping: Record<ActionType, ReactNode> = {
     update: <UpdateButton handleAction={handleUpdate} />,
+    updateAndStart: <UpdateAndStartButton handleAction={handleUpdate} />,
+    updateAndRestart: <UpdateAndRestartButton handleAction={handleUpdate} />,
     updating: <UpdateButton loading handleAction={handleUpdate} />,
     start: (
       <StartButton
@@ -146,13 +153,6 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
         enableBuildParameters={workspace.latest_build.transition === "start"}
       />
     ),
-    toggleFavorite: (
-      <FavoriteButton
-        workspaceID={workspace.id}
-        isFavorite={workspace.favorite}
-        onToggle={handleToggleFavorite}
-      />
-    ),
   };
 
   return (
@@ -160,19 +160,22 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
       css={{ display: "flex", alignItems: "center", gap: 8 }}
       data-testid="workspace-actions"
     >
-      {canBeUpdated && (
-        <>{isUpdating ? buttonMapping.updating : buttonMapping.update}</>
-      )}
-
-      {isRestarting
-        ? buttonMapping.restarting
-        : actions.map((action) => (
-            <Fragment key={action}>{buttonMapping[action]}</Fragment>
-          ))}
+      {/* Restarting must be handled separately, because it otherwise would appear as stopping */}
+      {isUpdating
+        ? buttonMapping.updating
+        : isRestarting
+          ? buttonMapping.restarting
+          : actions.map((action) => (
+              <Fragment key={action}>{buttonMapping[action]}</Fragment>
+            ))}
 
       {showCancel && <CancelButton handleAction={handleCancel} />}
 
-      {buttonMapping.toggleFavorite}
+      <FavoriteButton
+        workspaceID={workspace.id}
+        isFavorite={workspace.favorite}
+        onToggle={handleToggleFavorite}
+      />
 
       <MoreMenu>
         <MoreMenuTrigger>
@@ -207,6 +210,11 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
             Duplicate&hellip;
           </MoreMenuItem>
 
+          <MoreMenuItem onClick={() => setIsDownloadDialogOpen(true)}>
+            <DownloadOutlined />
+            Download logs&hellip;
+          </MoreMenuItem>
+
           <Divider />
 
           <MoreMenuItem
@@ -219,6 +227,13 @@ export const WorkspaceActions: FC<WorkspaceActionsProps> = ({
           </MoreMenuItem>
         </MoreMenuContent>
       </MoreMenu>
+
+      <DownloadLogsDialog
+        workspace={workspace}
+        open={isDownloadDialogOpen}
+        onClose={() => setIsDownloadDialogOpen(false)}
+        onConfirm={() => {}}
+      />
     </div>
   );
 };
@@ -232,12 +247,12 @@ function getTooltipText(
     return "";
   }
 
-  if (!mustUpdate && canChangeVersions) {
+  if (
+    !mustUpdate &&
+    canChangeVersions &&
+    workspace.template_require_active_version
+  ) {
     return "This template requires automatic updates on workspace startup, but template administrators can ignore this policy.";
-  }
-
-  if (workspace.template_require_active_version) {
-    return "This template requires automatic updates on workspace startup. Contact your administrator if you want to preserve the template version.";
   }
 
   if (workspace.automatic_updates === "always") {

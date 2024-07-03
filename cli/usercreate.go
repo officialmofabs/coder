@@ -10,6 +10,7 @@ import (
 	"github.com/coder/pretty"
 
 	"github.com/coder/coder/v2/cli/cliui"
+	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/cryptorand"
 	"github.com/coder/serpent"
@@ -19,9 +20,11 @@ func (r *RootCmd) userCreate() *serpent.Command {
 	var (
 		email        string
 		username     string
+		name         string
 		password     string
 		disableLogin bool
 		loginType    string
+		orgContext   = NewOrganizationContext()
 	)
 	client := new(codersdk.Client)
 	cmd := &serpent.Command{
@@ -31,10 +34,13 @@ func (r *RootCmd) userCreate() *serpent.Command {
 			r.InitClient(client),
 		),
 		Handler: func(inv *serpent.Invocation) error {
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return err
 			}
+			// We only prompt for the full name if both username and email have not
+			// been set. This is to avoid breaking existing non-interactive usage.
+			shouldPromptName := username == "" && email == ""
 			if username == "" {
 				username, err = cliui.Prompt(inv, cliui.PromptOptions{
 					Text: "Username:",
@@ -58,6 +64,18 @@ func (r *RootCmd) userCreate() *serpent.Command {
 					return err
 				}
 			}
+			if name == "" && shouldPromptName {
+				rawName, err := cliui.Prompt(inv, cliui.PromptOptions{
+					Text: "Full name (optional):",
+				})
+				if err != nil {
+					return err
+				}
+				name = httpapi.NormalizeRealUsername(rawName)
+				if !strings.EqualFold(rawName, name) {
+					cliui.Warnf(inv.Stderr, "Normalized name to %q", name)
+				}
+			}
 			userLoginType := codersdk.LoginTypePassword
 			if disableLogin && loginType != "" {
 				return xerrors.New("You cannot specify both --disable-login and --login-type")
@@ -79,6 +97,7 @@ func (r *RootCmd) userCreate() *serpent.Command {
 			_, err = client.CreateUser(inv.Context(), codersdk.CreateUserRequest{
 				Email:          email,
 				Username:       username,
+				Name:           name,
 				Password:       password,
 				OrganizationID: organization.ID,
 				UserLoginType:  userLoginType,
@@ -128,6 +147,12 @@ Create a workspace  `+pretty.Sprint(cliui.DefaultStyles.Code, "coder create")+`!
 			Value:         serpent.StringOf(&username),
 		},
 		{
+			Flag:          "full-name",
+			FlagShorthand: "n",
+			Description:   "Specifies an optional human-readable name for the new user.",
+			Value:         serpent.StringOf(&name),
+		},
+		{
 			Flag:          "password",
 			FlagShorthand: "p",
 			Description:   "Specifies a password for the new user.",
@@ -151,5 +176,7 @@ Create a workspace  `+pretty.Sprint(cliui.DefaultStyles.Code, "coder create")+`!
 			Value: serpent.StringOf(&loginType),
 		},
 	}
+
+	orgContext.AttachOptions(cmd)
 	return cmd
 }

@@ -26,6 +26,8 @@ export const withDashboardProvider = (
   return (
     <DashboardContext.Provider
       value={{
+        organizationId: "",
+        setOrganizationId: () => {},
         entitlements,
         experiments,
         appearance: MockAppearanceConfig,
@@ -76,3 +78,9 @@ export const withWebSocket = (Story: FC, { parameters }: StoryContext) => {
 
   return <Story />;
 };
+
+export const withDesktopViewport = (Story: FC) => (
+  <div style={{ width: 1200, height: 800 }}>
+    <Story />
+  </div>
+);

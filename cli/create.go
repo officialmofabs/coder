@@ -29,21 +29,22 @@ func (r *RootCmd) create() *serpent.Command {
 		parameterFlags     workspaceParameterFlags
 		autoUpdates        string
 		copyParametersFrom string
+		orgContext         = NewOrganizationContext()
 	)
 	client := new(codersdk.Client)
 	cmd := &serpent.Command{
 		Annotations: workspaceCommand,
 		Use:         "create [name]",
 		Short:       "Create a workspace",
-		Long: formatExamples(
-			example{
+		Long: FormatExamples(
+			Example{
 				Description: "Create a workspace for another user (if you have permission)",
 				Command:     "coder create <username>/<workspace_name>",
 			},
 		),
 		Middleware: serpent.Chain(r.InitClient(client)),
 		Handler: func(inv *serpent.Invocation) error {
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return err
 			}
@@ -269,6 +270,7 @@ func (r *RootCmd) create() *serpent.Command {
 	)
 	cmd.Options = append(cmd.Options, parameterFlags.cliParameters()...)
 	cmd.Options = append(cmd.Options, parameterFlags.cliParameterDefaults()...)
+	orgContext.AttachOptions(cmd)
 	return cmd
 }
 

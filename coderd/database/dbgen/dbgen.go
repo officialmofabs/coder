@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/coder/coder/v2/coderd/database/provisionerjobs"
 	"github.com/coder/coder/v2/coderd/database/pubsub"
 	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/cryptorand"
 )
 
@@ -31,7 +33,7 @@ import (
 // genCtx is to give all generator functions permission if the db is a dbauthz db.
 var genCtx = dbauthz.As(context.Background(), rbac.Subject{
 	ID:     "owner",
-	Roles:  rbac.Roles(must(rbac.RoleNames{rbac.RoleOwner()}.Expand())),
+	Roles:  rbac.Roles(must(rbac.RoleIdentifiers{rbac.RoleOwner()}.Expand())),
 	Groups: []string{},
 	Scope:  rbac.ExpandableScope(rbac.ScopeAll),
 })
@@ -69,7 +71,7 @@ func Template(t testing.TB, db database.Store, seed database.Template) database.
 	if seed.GroupACL == nil {
 		// By default, all users in the organization can read the template.
 		seed.GroupACL = database.TemplateACL{
-			seed.OrganizationID.String(): []rbac.Action{rbac.ActionRead},
+			seed.OrganizationID.String(): []policy.Action{policy.ActionRead},
 		}
 	}
 	if seed.UserACL == nil {
@@ -287,6 +289,7 @@ func User(t testing.TB, db database.Store, orig database.User) database.User {
 		ID:             takeFirst(orig.ID, uuid.New()),
 		Email:          takeFirst(orig.Email, namesgenerator.GetRandomName(1)),
 		Username:       takeFirst(orig.Username, namesgenerator.GetRandomName(1)),
+		Name:           takeFirst(orig.Name, namesgenerator.GetRandomName(1)),
 		HashedPassword: takeFirstSlice(orig.HashedPassword, []byte(must(cryptorand.String(32)))),
 		CreatedAt:      takeFirst(orig.CreatedAt, dbtime.Now()),
 		UpdatedAt:      takeFirst(orig.UpdatedAt, dbtime.Now()),
@@ -334,7 +337,9 @@ func Organization(t testing.TB, db database.Store, orig database.Organization) d
 	org, err := db.InsertOrganization(genCtx, database.InsertOrganizationParams{
 		ID:          takeFirst(orig.ID, uuid.New()),
 		Name:        takeFirst(orig.Name, namesgenerator.GetRandomName(1)),
+		DisplayName: takeFirst(orig.Name, namesgenerator.GetRandomName(1)),
 		Description: takeFirst(orig.Description, namesgenerator.GetRandomName(1)),
+		Icon:        takeFirst(orig.Icon, ""),
 		CreatedAt:   takeFirst(orig.CreatedAt, dbtime.Now()),
 		UpdatedAt:   takeFirst(orig.UpdatedAt, dbtime.Now()),
 	})
@@ -677,6 +682,16 @@ func TemplateVersionVariable(t testing.TB, db database.Store, orig database.Temp
 	return version
 }
 
+func TemplateVersionWorkspaceTag(t testing.TB, db database.Store, orig database.TemplateVersionWorkspaceTag) database.TemplateVersionWorkspaceTag {
+	workspaceTag, err := db.InsertTemplateVersionWorkspaceTag(genCtx, database.InsertTemplateVersionWorkspaceTagParams{
+		TemplateVersionID: takeFirst(orig.TemplateVersionID, uuid.New()),
+		Key:               takeFirst(orig.Key, namesgenerator.GetRandomName(1)),
+		Value:             takeFirst(orig.Value, namesgenerator.GetRandomName(1)),
+	})
+	require.NoError(t, err, "insert template version workspace tag")
+	return workspaceTag
+}
+
 func TemplateVersionParameter(t testing.TB, db database.Store, orig database.TemplateVersionParameter) database.TemplateVersionParameter {
 	t.Helper()
 
@@ -804,6 +819,19 @@ func OAuth2ProviderAppToken(t testing.TB, db database.Store, seed database.OAuth
 	})
 	require.NoError(t, err, "insert oauth2 app token")
 	return token
+}
+
+func CustomRole(t testing.TB, db database.Store, seed database.CustomRole) database.CustomRole {
+	role, err := db.UpsertCustomRole(genCtx, database.UpsertCustomRoleParams{
+		Name:            takeFirst(seed.Name, strings.ToLower(namesgenerator.GetRandomName(1))),
+		DisplayName:     namesgenerator.GetRandomName(1),
+		OrganizationID:  seed.OrganizationID,
+		SitePermissions: takeFirstSlice(seed.SitePermissions, []database.CustomRolePermission{}),
+		OrgPermissions:  takeFirstSlice(seed.SitePermissions, []database.CustomRolePermission{}),
+		UserPermissions: takeFirstSlice(seed.SitePermissions, []database.CustomRolePermission{}),
+	})
+	require.NoError(t, err, "insert custom role")
+	return role
 }
 
 func must[V any](v V, err error) V {

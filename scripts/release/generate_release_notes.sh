@@ -57,9 +57,6 @@ done
 # Check dependencies.
 dependencies gh sort
 
-# Authticate gh CLI
-gh_auth
-
 if [[ -z ${old_version} ]]; then
 	error "No old version specified"
 fi
@@ -147,7 +144,6 @@ for commit in "${commits[@]}"; do
 		title="${title} (${commit})"
 	fi
 	line="- ${title}"
-	line=${line//) (/, )}
 	if [[ -v COMMIT_METADATA_AUTHORS[${commit}] ]]; then
 		line+=" (${COMMIT_METADATA_AUTHORS[${commit}]})"
 	fi

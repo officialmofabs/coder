@@ -13,9 +13,17 @@ import type { TemplateVersionFiles } from "utils/templateVersion";
 
 export const MockOrganization: TypesGen.Organization = {
   id: "fc0774ce-cc9e-48d4-80ae-88f7a4d4a8b0",
-  name: "Test Organization",
+  name: "my-organization",
+  display_name: "My Organization",
+  description: "An organization that gets used for stuff.",
+  icon: "/emojis/1f957.png",
   created_at: "",
   updated_at: "",
+  is_default: false,
+};
+
+export const MockDefaultOrganization: TypesGen.Organization = {
+  ...MockOrganization,
   is_default: true,
 };
 
@@ -202,6 +210,7 @@ export const MockBuildInfo: TypesGen.BuildInfoResponse = {
   workspace_proxy: false,
   upgrade_message: "My custom upgrade message",
   deployment_id: "510d407f-e521-4180-b559-eab4a6d802b8",
+  telemetry: true,
 };
 
 export const MockSupportLinks: TypesGen.LinkConfig[] = [
@@ -232,19 +241,31 @@ export const MockUpdateCheck: TypesGen.UpdateCheckResponse = {
 export const MockOwnerRole: TypesGen.Role = {
   name: "owner",
   display_name: "Owner",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: "",
 };
 
 export const MockUserAdminRole: TypesGen.Role = {
   name: "user_admin",
   display_name: "User Admin",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: "",
 };
 
 export const MockTemplateAdminRole: TypesGen.Role = {
   name: "template_admin",
   display_name: "Template Admin",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: "",
 };
 
-export const MockMemberRole: TypesGen.Role = {
+export const MockMemberRole: TypesGen.SlimRole = {
   name: "member",
   display_name: "Member",
 };
@@ -252,6 +273,10 @@ export const MockMemberRole: TypesGen.Role = {
 export const MockAuditorRole: TypesGen.Role = {
   name: "auditor",
   display_name: "Auditor",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: "",
 };
 
 // assignableRole takes a role and a boolean. The boolean implies if the
@@ -263,6 +288,7 @@ export function assignableRole(
   return {
     ...role,
     assignable: assignable,
+    built_in: true,
   };
 }
 
@@ -454,6 +480,7 @@ export const MockTemplate: TypesGen.Template = {
   created_at: "2022-05-17T17:39:01.382927298Z",
   updated_at: "2022-05-18T17:39:01.382927298Z",
   organization_id: MockOrganization.id,
+  organization_name: "default",
   name: "test-template",
   display_name: "Test Template",
   provisioner: MockProvisioner.provisioners[0],
@@ -1030,6 +1057,7 @@ export const MockWorkspace: TypesGen.Workspace = {
   outdated: false,
   owner_id: MockUser.id,
   organization_id: MockOrganization.id,
+  organization_name: "default",
   owner_name: MockUser.username,
   owner_avatar_url: "https://avatars.githubusercontent.com/u/7122116?v=4",
   autostart_schedule: MockWorkspaceAutostartEnabled.schedule,
@@ -1155,10 +1183,6 @@ export const MockOutdatedRunningWorkspaceRequireActiveVersion: TypesGen.Workspac
     id: "test-outdated-workspace-require-active-version",
     outdated: true,
     template_require_active_version: true,
-    latest_build: {
-      ...MockWorkspaceBuild,
-      status: "running",
-    },
   };
 
 export const MockOutdatedRunningWorkspaceAlwaysUpdate: TypesGen.Workspace = {
@@ -2355,7 +2379,7 @@ export const MockAppearanceConfig: TypesGen.AppearanceConfig = {
   service_banner: {
     enabled: false,
   },
-  notification_banners: [],
+  announcement_banners: [],
 };
 
 export const MockWorkspaceBuildParameter1: TypesGen.WorkspaceBuildParameter = {
@@ -2511,7 +2535,6 @@ export const MockHealth: TypesGen.HealthcheckReport = {
   time: "2023-08-01T16:51:03.29792825Z",
   healthy: true,
   severity: "ok",
-  failing_sections: [],
   derp: {
     healthy: true,
     severity: "ok",
@@ -3305,7 +3328,6 @@ export const MockSharedPortsResponse: TypesGen.WorkspaceAgentPortShares = {
 export const DeploymentHealthUnhealthy: TypesGen.HealthcheckReport = {
   healthy: false,
   severity: "ok",
-  failing_sections: [], // apparently this property is not used at all?
   time: "2023-10-12T23:15:00.000000000Z",
   coder_version: "v2.3.0-devel+8cca4915a",
   access_url: {

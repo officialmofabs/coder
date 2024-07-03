@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"cdr.dev/slog"
+	"github.com/coder/coder/v2/agent/proto"
 	"github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/db2sdk"
@@ -24,6 +26,7 @@ import (
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
 	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/coderd/schedule/cron"
 	"github.com/coder/coder/v2/coderd/searchquery"
 	"github.com/coder/coder/v2/coderd/telemetry"
@@ -160,7 +163,7 @@ func (api *API) workspaces(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// Workspaces do not have ACL columns.
-	prepared, err := api.HTTPAuth.AuthorizeSQLFilter(r, rbac.ActionRead, rbac.ResourceWorkspace.Type)
+	prepared, err := api.HTTPAuth.AuthorizeSQLFilter(r, policy.ActionRead, rbac.ResourceWorkspace.Type)
 	if err != nil {
 		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
 			Message: "Internal error preparing sql filter.",
@@ -358,24 +361,19 @@ func (api *API) postWorkspacesByOrganization(rw http.ResponseWriter, r *http.Req
 		}
 	)
 
-	wriBytes, err := json.Marshal(workspaceResourceInfo)
-	if err != nil {
-		api.Logger.Warn(ctx, "marshal workspace owner name")
-	}
-
 	aReq, commitAudit := audit.InitRequest[database.Workspace](rw, &audit.RequestParams{
 		Audit:            *auditor,
 		Log:              api.Logger,
 		Request:          r,
 		Action:           database.AuditActionCreate,
-		AdditionalFields: wriBytes,
+		AdditionalFields: workspaceResourceInfo,
 		OrganizationID:   organization.ID,
 	})
 
 	defer commitAudit()
 
 	// Do this upfront to save work.
-	if !api.Authorize(r, rbac.ActionCreate,
+	if !api.Authorize(r, policy.ActionCreate,
 		rbac.ResourceWorkspace.InOrg(organization.ID).WithOwner(member.UserID.String())) {
 		httpapi.ResourceNotFound(rw)
 		return
@@ -570,7 +568,7 @@ func (api *API) postWorkspacesByOrganization(rw http.ResponseWriter, r *http.Req
 		workspaceBuild, provisionerJob, err = builder.Build(
 			ctx,
 			db,
-			func(action rbac.Action, object rbac.Objecter) bool {
+			func(action policy.Action, object rbac.Objecter) bool {
 				return api.Authorize(r, action, object)
 			},
 			audit.WorkspaceBuildBaggageFromRequest(r),
@@ -1104,17 +1102,115 @@ func (api *API) putExtendWorkspace(rw http.ResponseWriter, r *http.Request) {
 // @ID post-workspace-usage-by-id
 // @Security CoderSessionToken
 // @Tags Workspaces
+// @Accept json
 // @Param workspace path string true "Workspace ID" format(uuid)
+// @Param request body codersdk.PostWorkspaceUsageRequest false "Post workspace usage request"
 // @Success 204
 // @Router /workspaces/{workspace}/usage [post]
 func (api *API) postWorkspaceUsage(rw http.ResponseWriter, r *http.Request) {
 	workspace := httpmw.WorkspaceParam(r)
-	if !api.Authorize(r, rbac.ActionUpdate, workspace) {
+	if !api.Authorize(r, policy.ActionUpdate, workspace) {
 		httpapi.Forbidden(rw)
 		return
 	}
 
-	api.workspaceUsageTracker.Add(workspace.ID)
+	api.statsReporter.TrackUsage(workspace.ID)
+
+	if !api.Experiments.Enabled(codersdk.ExperimentWorkspaceUsage) {
+		// Continue previous behavior if the experiment is not enabled.
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Body == http.NoBody {
+		// Continue previous behavior if no body is present.
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	ctx := r.Context()
+	var req codersdk.PostWorkspaceUsageRequest
+	if !httpapi.Read(ctx, rw, r, &req) {
+		return
+	}
+
+	if req.AgentID == uuid.Nil && req.AppName == "" {
+		// Continue previous behavior if body is empty.
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if req.AgentID == uuid.Nil {
+		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+			Message: "Invalid request",
+			Validations: []codersdk.ValidationError{{
+				Field:  "agent_id",
+				Detail: "must be set when app_name is set",
+			}},
+		})
+		return
+	}
+	if req.AppName == "" {
+		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+			Message: "Invalid request",
+			Validations: []codersdk.ValidationError{{
+				Field:  "app_name",
+				Detail: "must be set when agent_id is set",
+			}},
+		})
+		return
+	}
+	if !slices.Contains(codersdk.AllowedAppNames, req.AppName) {
+		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+			Message: "Invalid request",
+			Validations: []codersdk.ValidationError{{
+				Field:  "app_name",
+				Detail: fmt.Sprintf("must be one of %v", codersdk.AllowedAppNames),
+			}},
+		})
+		return
+	}
+
+	stat := &proto.Stats{
+		ConnectionCount: 1,
+	}
+	switch req.AppName {
+	case codersdk.UsageAppNameVscode:
+		stat.SessionCountVscode = 1
+	case codersdk.UsageAppNameJetbrains:
+		stat.SessionCountJetbrains = 1
+	case codersdk.UsageAppNameReconnectingPty:
+		stat.SessionCountReconnectingPty = 1
+	case codersdk.UsageAppNameSSH:
+		stat.SessionCountSsh = 1
+	default:
+		// This means the app_name is in the codersdk.AllowedAppNames but not being
+		// handled by this switch statement.
+		httpapi.InternalServerError(rw, xerrors.Errorf("unknown app_name %q", req.AppName))
+		return
+	}
+
+	agent, err := api.Database.GetWorkspaceAgentByID(ctx, req.AgentID)
+	if err != nil {
+		if httpapi.Is404Error(err) {
+			httpapi.ResourceNotFound(rw)
+			return
+		}
+		httpapi.InternalServerError(rw, err)
+		return
+	}
+
+	template, err := api.Database.GetTemplateByID(ctx, workspace.TemplateID)
+	if err != nil {
+		httpapi.InternalServerError(rw, err)
+		return
+	}
+
+	err = api.statsReporter.ReportAgentStats(ctx, dbtime.Now(), workspace, agent, template.Name, stat)
+	if err != nil {
+		httpapi.InternalServerError(rw, err)
+		return
+	}
+
 	rw.WriteHeader(http.StatusNoContent)
 }
 
@@ -1678,6 +1774,7 @@ func convertWorkspace(
 		OwnerName:                            username,
 		OwnerAvatarURL:                       avatarURL,
 		OrganizationID:                       workspace.OrganizationID,
+		OrganizationName:                     template.OrganizationName,
 		TemplateID:                           workspace.TemplateID,
 		LatestBuild:                          workspaceBuild,
 		TemplateName:                         template.Name,

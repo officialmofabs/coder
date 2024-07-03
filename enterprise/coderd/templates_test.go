@@ -717,6 +717,57 @@ func TestTemplates(t *testing.T) {
 		_, err = owner.Template(ctx, template.ID)
 		require.NoError(t, err)
 	})
+
+	// Create a template in a second organization via custom role
+	t.Run("SecondOrganization", func(t *testing.T) {
+		t.Parallel()
+
+		dv := coderdtest.DeploymentValues(t)
+		dv.Experiments = []string{string(codersdk.ExperimentCustomRoles)}
+		ownerClient, _ := coderdenttest.New(t, &coderdenttest.Options{
+			Options: &coderdtest.Options{
+				DeploymentValues:         dv,
+				IncludeProvisionerDaemon: false,
+			},
+			LicenseOptions: &coderdenttest.LicenseOptions{
+				Features: license.Features{
+					codersdk.FeatureAccessControl:              1,
+					codersdk.FeatureCustomRoles:                1,
+					codersdk.FeatureExternalProvisionerDaemons: 1,
+				},
+			},
+		})
+
+		ctx := testutil.Context(t, testutil.WaitMedium)
+		secondOrg := coderdtest.CreateOrganization(t, ownerClient, coderdtest.CreateOrganizationOptions{
+			IncludeProvisionerDaemon: true,
+		})
+
+		//nolint:gocritic // owner required to make custom roles
+		orgTemplateAdminRole, err := ownerClient.PatchOrganizationRole(ctx, secondOrg.ID, codersdk.Role{
+			Name:           "org-template-admin",
+			OrganizationID: secondOrg.ID.String(),
+			OrganizationPermissions: codersdk.CreatePermissions(map[codersdk.RBACResource][]codersdk.RBACAction{
+				codersdk.ResourceTemplate: codersdk.RBACResourceActions[codersdk.ResourceTemplate],
+			}),
+		})
+		require.NoError(t, err, "create admin role")
+
+		orgTemplateAdmin, _ := coderdtest.CreateAnotherUser(t, ownerClient, secondOrg.ID, rbac.RoleIdentifier{
+			Name:           orgTemplateAdminRole.Name,
+			OrganizationID: secondOrg.ID,
+		})
+
+		version := coderdtest.CreateTemplateVersion(t, orgTemplateAdmin, secondOrg.ID, &echo.Responses{
+			Parse:          echo.ParseComplete,
+			ProvisionApply: echo.ApplyComplete,
+			ProvisionPlan:  echo.PlanComplete,
+		})
+		coderdtest.AwaitTemplateVersionJobCompleted(t, orgTemplateAdmin, version.ID)
+
+		template := coderdtest.CreateTemplate(t, orgTemplateAdmin, secondOrg.ID, version.ID)
+		require.Equal(t, template.OrganizationID, secondOrg.ID)
+	})
 }
 
 func TestTemplateACL(t *testing.T) {
@@ -1639,9 +1690,9 @@ func TestTemplateAccess(t *testing.T) {
 		newOrg, err := ownerClient.CreateOrganization(ctx, codersdk.CreateOrganizationRequest{Name: orgName})
 		require.NoError(t, err, "failed to create org")
 
-		adminCli, adminUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.RoleOrgAdmin(newOrg.ID))
-		groupMemCli, groupMemUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.RoleOrgMember(newOrg.ID))
-		memberCli, memberUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.RoleOrgMember(newOrg.ID))
+		adminCli, adminUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.ScopedRoleOrgAdmin(newOrg.ID))
+		groupMemCli, groupMemUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.ScopedRoleOrgMember(newOrg.ID))
+		memberCli, memberUsr := coderdtest.CreateAnotherUser(t, ownerClient, newOrg.ID, rbac.ScopedRoleOrgMember(newOrg.ID))
 
 		// Make group
 		group, err := adminCli.CreateGroup(ctx, newOrg.ID, codersdk.CreateGroupRequest{

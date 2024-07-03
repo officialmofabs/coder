@@ -33,6 +33,7 @@ export const createUser = async (orgId: string) => {
   const user = await API.createUser({
     email: `${name}@coder.com`,
     username: name,
+    name: name,
     password: "s3cure&password!",
     login_type: "password",
     disable_login: false,
@@ -50,6 +51,17 @@ export const createGroup = async (orgId: string) => {
     quota_allowance: 0,
   });
   return group;
+};
+
+export const createOrganization = async () => {
+  const name = randomName();
+  const org = await API.createOrganization({
+    name,
+    display_name: `Org ${name}`,
+    description: `Org description ${name}`,
+    icon: "/emojis/1f957.png",
+  });
+  return org;
 };
 
 export async function verifyConfigFlagBoolean(

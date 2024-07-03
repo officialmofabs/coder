@@ -24,9 +24,11 @@ import (
 	"github.com/coder/coder/v2/coderd/database/dbtime"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
+	"github.com/coder/coder/v2/coderd/telemetry"
 	"github.com/coder/coder/v2/coderd/util/ptr"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/tailnet"
+	tailnetproto "github.com/coder/coder/v2/tailnet/proto"
 )
 
 // @Summary Workspace agent RPC API
@@ -130,11 +132,11 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 		Pubsub:                            api.Pubsub,
 		DerpMapFn:                         api.DERPMap,
 		TailnetCoordinator:                &api.TailnetCoordinator,
-		TemplateScheduleStore:             api.TemplateScheduleStore,
 		AppearanceFetcher:                 &api.AppearanceFetcher,
-		StatsBatcher:                      api.statsBatcher,
+		StatsReporter:                     api.statsReporter,
 		PublishWorkspaceUpdateFn:          api.publishWorkspaceUpdate,
 		PublishWorkspaceAgentLogsUpdateFn: api.publishWorkspaceAgentLogsUpdate,
+		NetworkTelemetryHandler:           api.NetworkTelemetryBatcher.Handler,
 
 		AccessURL:                 api.AccessURL,
 		AppHostname:               api.AppHostname,
@@ -143,6 +145,7 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 		DerpForceWebSockets:       api.DeploymentValues.DERP.Config.ForceWebSockets.Value(),
 		DerpMapUpdateFrequency:    api.Options.DERPMapUpdateFrequency,
 		ExternalAuthConfigs:       api.ExternalAuthConfigs,
+		Experiments:               api.Experiments,
 
 		// Optional:
 		WorkspaceID:          build.WorkspaceID, // saves the extra lookup later
@@ -164,29 +167,20 @@ func (api *API) workspaceAgentRPC(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (api *API) startAgentWebsocketMonitor(ctx context.Context,
-	workspaceAgent database.WorkspaceAgent, workspaceBuild database.WorkspaceBuild,
-	conn *websocket.Conn,
-) *agentConnectionMonitor {
-	monitor := &agentConnectionMonitor{
-		apiCtx:            api.ctx,
-		workspaceAgent:    workspaceAgent,
-		workspaceBuild:    workspaceBuild,
-		conn:              conn,
-		pingPeriod:        api.AgentConnectionUpdateFrequency,
-		db:                api.Database,
-		replicaID:         api.ID,
-		updater:           api,
-		disconnectTimeout: api.AgentInactiveDisconnectTimeout,
-		logger: api.Logger.With(
-			slog.F("workspace_id", workspaceBuild.WorkspaceID),
-			slog.F("agent_id", workspaceAgent.ID),
-		),
+func (api *API) handleNetworkTelemetry(batch []*tailnetproto.TelemetryEvent) {
+	telemetryEvents := make([]telemetry.NetworkEvent, 0, len(batch))
+	for _, pEvent := range batch {
+		tEvent, err := telemetry.NetworkEventFromProto(pEvent)
+		if err != nil {
+			// Events that fail to be converted get discarded for now.
+			continue
+		}
+		telemetryEvents = append(telemetryEvents, tEvent)
 	}
-	monitor.init()
-	monitor.start(ctx)
 
-	return monitor
+	api.Telemetry.Report(&telemetry.Snapshot{
+		NetworkEvents: telemetryEvents,
+	})
 }
 
 type yamuxPingerCloser struct {

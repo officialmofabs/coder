@@ -31,6 +31,7 @@ func (r *RootCmd) setArchiveTemplateVersion(archive bool) *serpent.Command {
 		pastVerb = "unarchived"
 	}
 
+	orgContext := NewOrganizationContext()
 	client := new(codersdk.Client)
 	cmd := &serpent.Command{
 		Use:   presentVerb + " <template-name> [template-version-names...] ",
@@ -47,7 +48,7 @@ func (r *RootCmd) setArchiveTemplateVersion(archive bool) *serpent.Command {
 				versions []codersdk.TemplateVersion
 			)
 
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return err
 			}
@@ -92,6 +93,7 @@ func (r *RootCmd) setArchiveTemplateVersion(archive bool) *serpent.Command {
 			return nil
 		},
 	}
+	orgContext.AttachOptions(cmd)
 
 	return cmd
 }
@@ -99,6 +101,7 @@ func (r *RootCmd) setArchiveTemplateVersion(archive bool) *serpent.Command {
 func (r *RootCmd) archiveTemplateVersions() *serpent.Command {
 	var all serpent.Bool
 	client := new(codersdk.Client)
+	orgContext := NewOrganizationContext()
 	cmd := &serpent.Command{
 		Use:   "archive [template-name...] ",
 		Short: "Archive unused or failed template versions from a given template(s)",
@@ -121,7 +124,7 @@ func (r *RootCmd) archiveTemplateVersions() *serpent.Command {
 				templates     = []codersdk.Template{}
 			)
 
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return err
 			}
@@ -166,7 +169,7 @@ func (r *RootCmd) archiveTemplateVersions() *serpent.Command {
 					inv.Stdout, fmt.Sprintf("Archived %d versions from "+pretty.Sprint(cliui.DefaultStyles.Keyword, template.Name)+" at "+cliui.Timestamp(time.Now()), len(resp.ArchivedIDs)),
 				)
 
-				if ok, _ := inv.ParsedFlags().GetBool("verbose"); err == nil && ok {
+				if ok, _ := inv.ParsedFlags().GetBool("verbose"); ok {
 					data, err := json.Marshal(resp)
 					if err != nil {
 						return xerrors.Errorf("marshal verbose response: %w", err)
@@ -179,6 +182,7 @@ func (r *RootCmd) archiveTemplateVersions() *serpent.Command {
 			return nil
 		},
 	}
+	orgContext.AttachOptions(cmd)
 
 	return cmd
 }

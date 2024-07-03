@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceStatus } from "api/typesGenerated";
+import type { Workspace } from "api/typesGenerated";
 
 /**
  * An iterable of all action types supported by the workspace UI
@@ -6,16 +6,19 @@ import type { Workspace, WorkspaceStatus } from "api/typesGenerated";
 export const actionTypes = [
   "start",
   "starting",
+  // Replaces start when an update is required.
+  "updateAndStart",
   "stop",
   "stopping",
   "restart",
   "restarting",
+  // Replaces restart when an update is required.
+  "updateAndRestart",
   "deleting",
   "update",
   "updating",
   "activate",
   "activating",
-  "toggleFavorite",
 
   // There's no need for a retrying state because retrying starts a transition
   // into one of the starting, stopping, or deleting states (based on the
@@ -50,69 +53,114 @@ export const abilitiesByWorkspaceStatus = (
   }
 
   const status = workspace.latest_build.status;
-  if (status === "failed" && canDebug) {
-    return {
-      ...statusToAbility.failed,
-      actions: ["retry", "debug"],
-    };
+
+  switch (status) {
+    case "starting": {
+      return {
+        actions: ["starting"],
+        canCancel: true,
+        canAcceptJobs: false,
+      };
+    }
+    case "running": {
+      const actions: ActionType[] = ["stop"];
+
+      if (workspace.template_require_active_version && workspace.outdated) {
+        actions.push("updateAndRestart");
+      } else {
+        if (workspace.outdated) {
+          actions.unshift("update");
+        }
+        actions.push("restart");
+      }
+
+      return {
+        actions,
+        canCancel: false,
+        canAcceptJobs: true,
+      };
+    }
+    case "stopping": {
+      return {
+        actions: ["stopping"],
+        canCancel: true,
+        canAcceptJobs: false,
+      };
+    }
+    case "stopped": {
+      const actions: ActionType[] = [];
+
+      if (workspace.template_require_active_version && workspace.outdated) {
+        actions.push("updateAndStart");
+      } else {
+        if (workspace.outdated) {
+          actions.unshift("update");
+        }
+        actions.push("start");
+      }
+
+      return {
+        actions,
+        canCancel: false,
+        canAcceptJobs: true,
+      };
+    }
+    case "canceled": {
+      return {
+        actions: ["start", "stop"],
+        canCancel: false,
+        canAcceptJobs: true,
+      };
+    }
+    case "failed": {
+      const actions: ActionType[] = ["retry"];
+
+      if (canDebug) {
+        actions.push("debug");
+      }
+
+      if (workspace.outdated) {
+        actions.unshift("update");
+      }
+
+      return {
+        actions,
+        canCancel: false,
+        canAcceptJobs: true,
+      };
+    }
+
+    // Disabled states
+    case "pending": {
+      return {
+        actions: ["pending"],
+        canCancel: false,
+        canAcceptJobs: false,
+      };
+    }
+    case "canceling": {
+      return {
+        actions: ["canceling"],
+        canCancel: false,
+        canAcceptJobs: false,
+      };
+    }
+    case "deleting": {
+      return {
+        actions: ["deleting"],
+        canCancel: true,
+        canAcceptJobs: false,
+      };
+    }
+    case "deleted": {
+      return {
+        actions: ["deleted"],
+        canCancel: false,
+        canAcceptJobs: false,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown workspace status: ${status}`);
   }
-
-  return statusToAbility[status];
-};
-
-const statusToAbility: Record<WorkspaceStatus, WorkspaceAbilities> = {
-  starting: {
-    actions: ["starting"],
-    canCancel: true,
-    canAcceptJobs: false,
-  },
-  running: {
-    actions: ["stop", "restart"],
-    canCancel: false,
-    canAcceptJobs: true,
-  },
-  stopping: {
-    actions: ["stopping"],
-    canCancel: true,
-    canAcceptJobs: false,
-  },
-  stopped: {
-    actions: ["start"],
-    canCancel: false,
-    canAcceptJobs: true,
-  },
-  canceled: {
-    actions: ["start", "stop"],
-    canCancel: false,
-    canAcceptJobs: true,
-  },
-
-  // in the case of an error
-  failed: {
-    actions: ["retry"],
-    canCancel: false,
-    canAcceptJobs: true,
-  },
-
-  // Disabled states
-  canceling: {
-    actions: ["canceling"],
-    canCancel: false,
-    canAcceptJobs: false,
-  },
-  deleting: {
-    actions: ["deleting"],
-    canCancel: true,
-    canAcceptJobs: false,
-  },
-  deleted: {
-    actions: ["deleted"],
-    canCancel: false,
-    canAcceptJobs: false,
-  },
-  pending: {
-    actions: ["pending"],
-    canCancel: false,
-    canAcceptJobs: false,
-  },
 };

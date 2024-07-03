@@ -24,6 +24,7 @@ import type dayjs from "dayjs";
 import userAgentParser from "ua-parser-js";
 import { delay } from "../utils/delay";
 import * as TypesGen from "./typesGenerated";
+import type { PostWorkspaceUsageRequest } from "./typesGenerated";
 
 const getMissingParameters = (
   oldBuildParameters: TypesGen.WorkspaceBuildParameter[],
@@ -314,7 +315,7 @@ type RestartWorkspaceParameters = Readonly<{
 
 export type DeleteWorkspaceOptions = Pick<
   TypesGen.CreateWorkspaceBuildRequest,
-  "log_level" & "orphan"
+  "log_level" | "orphan"
 >;
 
 export type DeploymentConfig = Readonly<{
@@ -503,6 +504,31 @@ class ApiMethods {
     );
 
     return response.data;
+  };
+
+  createOrganization = async (params: TypesGen.CreateOrganizationRequest) => {
+    const response = await this.axios.post<TypesGen.Organization>(
+      "/api/v2/organizations",
+      params,
+    );
+    return response.data;
+  };
+
+  updateOrganization = async (
+    orgId: string,
+    params: TypesGen.UpdateOrganizationRequest,
+  ) => {
+    const response = await this.axios.patch<TypesGen.Organization>(
+      `/api/v2/organizations/${orgId}`,
+      params,
+    );
+    return response.data;
+  };
+
+  deleteOrganization = async (orgId: string) => {
+    await this.axios.delete<TypesGen.Organization>(
+      `/api/v2/organizations/${orgId}`,
+    );
   };
 
   getOrganization = async (
@@ -1102,7 +1128,7 @@ class ApiMethods {
   };
 
   updateUserRoles = async (
-    roles: TypesGen.Role["name"][],
+    roles: TypesGen.SlimRole["name"][],
     userId: TypesGen.User["id"],
   ): Promise<TypesGen.User> => {
     const response = await this.axios.put<TypesGen.User>(
@@ -1142,10 +1168,9 @@ class ApiMethods {
 
   getWorkspaceBuildLogs = async (
     buildId: string,
-    before: Date,
   ): Promise<TypesGen.ProvisionerJobLog[]> => {
     const response = await this.axios.get<TypesGen.ProvisionerJobLog[]>(
-      `/api/v2/workspacebuilds/${buildId}/logs?before=${before.getTime()}`,
+      `/api/v2/workspacebuilds/${buildId}/logs`,
     );
 
     return response.data;
@@ -1430,8 +1455,10 @@ class ApiMethods {
     return response.data;
   };
 
-  getGroup = async (groupId: string): Promise<TypesGen.Group> => {
-    const response = await this.axios.get(`/api/v2/groups/${groupId}`);
+  getGroup = async (groupName: string): Promise<TypesGen.Group> => {
+    const response = await this.axios.get(
+      `/api/v2/organizations/default/groups/${groupName}`,
+    );
     return response.data;
   };
 
@@ -1581,7 +1608,7 @@ class ApiMethods {
         return {
           application_name: "",
           logo_url: "",
-          notification_banners: [],
+          announcement_banners: [],
           service_banner: {
             enabled: false,
           },
@@ -1854,6 +1881,18 @@ class ApiMethods {
 
       throw error;
     }
+  };
+
+  postWorkspaceUsage = async (
+    workspaceID: string,
+    options: PostWorkspaceUsageRequest,
+  ) => {
+    const response = await this.axios.post(
+      `/api/v2/workspaces/${workspaceID}/usage`,
+      options,
+    );
+
+    return response.data;
   };
 }
 

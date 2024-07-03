@@ -18,7 +18,7 @@ import type {
 } from "api/typesGenerated";
 import { displayError } from "components/GlobalSnackbar/utils";
 import { Loader } from "components/Loader/Loader";
-import { useAuthenticated } from "contexts/auth/RequireAuth";
+import { useDashboard } from "modules/dashboard/useDashboard";
 import { useWatchVersionLogs } from "modules/templates/useWatchVersionLogs";
 import { type FileTree, traverse } from "utils/filetree";
 import { pageTitle } from "utils/page";
@@ -36,7 +36,7 @@ export const TemplateVersionEditorPage: FC = () => {
   const navigate = useNavigate();
   const { version: versionName, template: templateName } =
     useParams() as Params;
-  const { organizationId } = useAuthenticated();
+  const { organizationId } = useDashboard();
   const templateQuery = useQuery(templateByName(organizationId, templateName));
   const templateVersionOptions = templateVersionByName(
     organizationId,
@@ -245,20 +245,32 @@ const useFileTree = (templateVersion: TemplateVersion | undefined) => {
     fileTree: undefined,
     tarFile: undefined,
   });
+
   useEffect(() => {
+    let stale = false;
     const initializeFileTree = async (file: ArrayBuffer) => {
       const tarFile = new TarReader();
-      await tarFile.readFile(file);
-      const fileTree = await createTemplateVersionFileTree(tarFile);
-      setState({ fileTree, tarFile });
+      try {
+        await tarFile.readFile(file);
+        // Ignore stale updates if this effect has been cancelled.
+        if (stale) {
+          return;
+        }
+        const fileTree = createTemplateVersionFileTree(tarFile);
+        setState({ fileTree, tarFile });
+      } catch (error) {
+        console.error(error);
+        displayError("Error on initializing the editor");
+      }
     };
 
     if (fileQuery.data) {
-      initializeFileTree(fileQuery.data).catch((reason) => {
-        console.error(reason);
-        displayError("Error on initializing the editor");
-      });
+      void initializeFileTree(fileQuery.data);
     }
+
+    return () => {
+      stale = true;
+    };
   }, [fileQuery.data]);
 
   return state;

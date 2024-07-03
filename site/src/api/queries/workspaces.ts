@@ -8,12 +8,15 @@ import { type DeleteWorkspaceOptions, API } from "api/api";
 import type {
   CreateWorkspaceRequest,
   ProvisionerLogLevel,
+  UsageAppName,
   Workspace,
   WorkspaceBuild,
   WorkspaceBuildParameter,
   WorkspacesRequest,
   WorkspacesResponse,
 } from "api/typesGenerated";
+import type { ConnectionStatus } from "pages/TerminalPage/types";
+import { disabledRefetchOptions } from "./util";
 import { workspaceBuildsKey } from "./workspaceBuilds";
 
 export const workspaceByOwnerAndNameKey = (owner: string, name: string) => [
@@ -281,5 +284,72 @@ export const toggleFavorite = (
         ),
       });
     },
+  };
+};
+
+export const buildLogsKey = (workspaceId: string) => [
+  "workspaces",
+  workspaceId,
+  "logs",
+];
+
+export const buildLogs = (workspace: Workspace) => {
+  return {
+    queryKey: buildLogsKey(workspace.id),
+    queryFn: () => API.getWorkspaceBuildLogs(workspace.latest_build.id),
+  };
+};
+
+export const agentLogsKey = (workspaceId: string, agentId: string) => [
+  "workspaces",
+  workspaceId,
+  "agents",
+  agentId,
+  "logs",
+];
+
+export const agentLogs = (workspaceId: string, agentId: string) => {
+  return {
+    queryKey: agentLogsKey(workspaceId, agentId),
+    queryFn: () => API.getWorkspaceAgentLogs(agentId),
+    ...disabledRefetchOptions,
+  };
+};
+
+// workspace usage options
+export interface WorkspaceUsageOptions {
+  usageApp: UsageAppName;
+  connectionStatus: ConnectionStatus;
+  workspaceId: string | undefined;
+  agentId: string | undefined;
+}
+
+export const workspaceUsage = (options: WorkspaceUsageOptions) => {
+  return {
+    queryKey: [
+      "workspaces",
+      options.workspaceId,
+      "agents",
+      options.agentId,
+      "usage",
+      options.usageApp,
+    ],
+    enabled:
+      options.workspaceId !== undefined &&
+      options.agentId !== undefined &&
+      options.connectionStatus === "connected",
+    queryFn: () => {
+      if (options.workspaceId === undefined || options.agentId === undefined) {
+        return Promise.reject();
+      }
+
+      return API.postWorkspaceUsage(options.workspaceId, {
+        agent_id: options.agentId,
+        app_name: options.usageApp,
+      });
+    },
+    // ...disabledRefetchOptions,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: true,
   };
 };

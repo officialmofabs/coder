@@ -19,9 +19,11 @@ import (
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
 	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/coderd/schedule"
 	"github.com/coder/coder/v2/coderd/telemetry"
 	"github.com/coder/coder/v2/coderd/util/ptr"
+	"github.com/coder/coder/v2/coderd/workspacestats"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/examples"
 )
@@ -322,7 +324,7 @@ func (api *API) postTemplateByOrganization(rw http.ResponseWriter, r *http.Reque
 	if !createTemplate.DisableEveryoneGroupAccess {
 		// The organization ID is used as the group ID for the everyone group
 		// in this organization.
-		defaultsGroups[organization.ID.String()] = []rbac.Action{rbac.ActionRead}
+		defaultsGroups[organization.ID.String()] = []policy.Action{policy.ActionRead}
 	}
 	err = api.Database.InTx(func(tx database.Store) error {
 		now := dbtime.Now()
@@ -433,55 +435,78 @@ func (api *API) postTemplateByOrganization(rw http.ResponseWriter, r *http.Reque
 // @Param organization path string true "Organization ID" format(uuid)
 // @Success 200 {array} codersdk.Template
 // @Router /organizations/{organization}/templates [get]
-func (api *API) templatesByOrganization(rw http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	organization := httpmw.OrganizationParam(r)
+func (api *API) templatesByOrganization() http.HandlerFunc {
+	// TODO: Should deprecate this endpoint and make it akin to /workspaces with
+	// 	a filter. There isn't a need to make the organization filter argument
+	//	part of the query url.
+	// mutate the filter to only include templates from the given organization.
+	return api.fetchTemplates(func(r *http.Request, arg *database.GetTemplatesWithFilterParams) {
+		organization := httpmw.OrganizationParam(r)
+		arg.OrganizationID = organization.ID
+	})
+}
 
-	p := httpapi.NewQueryParamParser()
-	values := r.URL.Query()
+// @Summary Get all templates
+// @ID get-all-templates
+// @Security CoderSessionToken
+// @Produce json
+// @Tags Templates
+// @Success 200 {array} codersdk.Template
+// @Router /templates [get]
+func (api *API) fetchTemplates(mutate func(r *http.Request, arg *database.GetTemplatesWithFilterParams)) http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 
-	deprecated := sql.NullBool{}
-	if values.Has("deprecated") {
-		deprecated = sql.NullBool{
-			Bool:  p.Boolean(values, false, "deprecated"),
-			Valid: true,
+		p := httpapi.NewQueryParamParser()
+		values := r.URL.Query()
+
+		deprecated := sql.NullBool{}
+		if values.Has("deprecated") {
+			deprecated = sql.NullBool{
+				Bool:  p.Boolean(values, false, "deprecated"),
+				Valid: true,
+			}
 		}
-	}
-	if len(p.Errors) > 0 {
-		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
-			Message:     "Invalid query params.",
-			Validations: p.Errors,
-		})
-		return
-	}
+		if len(p.Errors) > 0 {
+			httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+				Message:     "Invalid query params.",
+				Validations: p.Errors,
+			})
+			return
+		}
 
-	prepared, err := api.HTTPAuth.AuthorizeSQLFilter(r, rbac.ActionRead, rbac.ResourceTemplate.Type)
-	if err != nil {
-		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
-			Message: "Internal error preparing sql filter.",
-			Detail:  err.Error(),
-		})
-		return
-	}
+		prepared, err := api.HTTPAuth.AuthorizeSQLFilter(r, policy.ActionRead, rbac.ResourceTemplate.Type)
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+				Message: "Internal error preparing sql filter.",
+				Detail:  err.Error(),
+			})
+			return
+		}
 
-	// Filter templates based on rbac permissions
-	templates, err := api.Database.GetAuthorizedTemplates(ctx, database.GetTemplatesWithFilterParams{
-		OrganizationID: organization.ID,
-		Deprecated:     deprecated,
-	}, prepared)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = nil
-	}
+		args := database.GetTemplatesWithFilterParams{
+			Deprecated: deprecated,
+		}
+		if mutate != nil {
+			mutate(r, &args)
+		}
 
-	if err != nil {
-		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
-			Message: "Internal error fetching templates in organization.",
-			Detail:  err.Error(),
-		})
-		return
-	}
+		// Filter templates based on rbac permissions
+		templates, err := api.Database.GetAuthorizedTemplates(ctx, args, prepared)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+		}
 
-	httpapi.Write(ctx, rw, http.StatusOK, api.convertTemplates(templates))
+		if err != nil {
+			httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+				Message: "Internal error fetching templates in organization.",
+				Detail:  err.Error(),
+			})
+			return
+		}
+
+		httpapi.Write(ctx, rw, http.StatusOK, api.convertTemplates(templates))
+	}
 }
 
 // @Summary Get templates by organization and template name
@@ -725,6 +750,10 @@ func (api *API) patchTemplateMeta(rw http.ResponseWriter, r *http.Request) {
 		failureTTL := time.Duration(req.FailureTTLMillis) * time.Millisecond
 		inactivityTTL := time.Duration(req.TimeTilDormantMillis) * time.Millisecond
 		timeTilDormantAutoDelete := time.Duration(req.TimeTilDormantAutoDeleteMillis) * time.Millisecond
+		var updateWorkspaceLastUsedAt workspacestats.UpdateTemplateWorkspacesLastUsedAtFunc
+		if req.UpdateWorkspaceLastUsedAt {
+			updateWorkspaceLastUsedAt = workspacestats.UpdateTemplateWorkspacesLastUsedAt
+		}
 
 		if defaultTTL != time.Duration(template.DefaultTTL) ||
 			activityBump != time.Duration(template.ActivityBump) ||
@@ -754,7 +783,7 @@ func (api *API) patchTemplateMeta(rw http.ResponseWriter, r *http.Request) {
 				FailureTTL:                failureTTL,
 				TimeTilDormant:            inactivityTTL,
 				TimeTilDormantAutoDelete:  timeTilDormantAutoDelete,
-				UpdateWorkspaceLastUsedAt: req.UpdateWorkspaceLastUsedAt,
+				UpdateWorkspaceLastUsedAt: updateWorkspaceLastUsedAt,
 				UpdateWorkspaceDormantAt:  req.UpdateWorkspaceDormantAt,
 			})
 			if err != nil {
@@ -807,7 +836,7 @@ func (api *API) templateExamples(rw http.ResponseWriter, r *http.Request) {
 		organization = httpmw.OrganizationParam(r)
 	)
 
-	if !api.Authorize(r, rbac.ActionRead, rbac.ResourceTemplate.InOrg(organization.ID)) {
+	if !api.Authorize(r, policy.ActionRead, rbac.ResourceTemplate.InOrg(organization.ID)) {
 		httpapi.ResourceNotFound(rw)
 		return
 	}
@@ -865,6 +894,7 @@ func (api *API) convertTemplate(
 		CreatedAt:                      template.CreatedAt,
 		UpdatedAt:                      template.UpdatedAt,
 		OrganizationID:                 template.OrganizationID,
+		OrganizationName:               template.OrganizationName,
 		Name:                           template.Name,
 		DisplayName:                    template.DisplayName,
 		Provisioner:                    codersdk.ProvisionerType(template.Provisioner),

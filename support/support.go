@@ -10,18 +10,15 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netcheck"
 
-	"github.com/coder/coder/v2/coderd/healthcheck/derphealth"
-
-	"github.com/google/uuid"
-
 	"cdr.dev/slog"
 	"cdr.dev/slog/sloggers/sloghuman"
-	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/healthcheck/derphealth"
 	"github.com/coder/coder/v2/codersdk"
 	"github.com/coder/coder/v2/codersdk/agentsdk"
 	"github.com/coder/coder/v2/codersdk/healthsdk"
@@ -50,9 +47,10 @@ type Deployment struct {
 
 type Network struct {
 	ConnectionInfo   workspacesdk.AgentConnectionInfo
-	CoordinatorDebug string             `json:"coordinator_debug"`
-	Netcheck         *derphealth.Report `json:"netcheck"`
-	TailnetDebug     string             `json:"tailnet_debug"`
+	CoordinatorDebug string                     `json:"coordinator_debug"`
+	Netcheck         *derphealth.Report         `json:"netcheck"`
+	TailnetDebug     string                     `json:"tailnet_debug"`
+	Interfaces       healthsdk.InterfacesReport `json:"interfaces"`
 }
 
 type Netcheck struct {
@@ -194,6 +192,15 @@ func NetworkInfo(ctx context.Context, client *codersdk.Client, log slog.Logger) 
 			DERPMap: connInfo.DERPMap,
 		})
 		n.Netcheck = &rpt
+		return nil
+	})
+
+	eg.Go(func() error {
+		rpt, err := healthsdk.RunInterfacesReport()
+		if err != nil {
+			return xerrors.Errorf("run interfaces report: %w", err)
+		}
+		n.Interfaces = rpt
 		return nil
 	})
 
@@ -460,9 +467,9 @@ func Run(ctx context.Context, d *Deps) (*Bundle, error) {
 	authChecks := map[string]codersdk.AuthorizationCheck{
 		"Read DeploymentValues": {
 			Object: codersdk.AuthorizationObject{
-				ResourceType: codersdk.ResourceDeploymentValues,
+				ResourceType: codersdk.ResourceDeploymentConfig,
 			},
-			Action: string(rbac.ActionRead),
+			Action: codersdk.ActionRead,
 		},
 	}
 

@@ -15,6 +15,7 @@ import (
 	"github.com/coder/coder/v2/coderd/appearance"
 	"github.com/coder/coder/v2/coderd/database"
 	agplportsharing "github.com/coder/coder/v2/coderd/portsharing"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/enterprise/coderd/portsharing"
 
 	"golang.org/x/xerrors"
@@ -132,17 +133,18 @@ func New(ctx context.Context, options *Options) (_ *API, err error) {
 		// If the user can read the workspace proxy resource, return that.
 		// If not, always default to the regions.
 		actor, ok := agpldbauthz.ActorFromContext(ctx)
-		if ok && api.Authorizer.Authorize(ctx, actor, rbac.ActionRead, rbac.ResourceWorkspaceProxy) == nil {
+		if ok && api.Authorizer.Authorize(ctx, actor, policy.ActionRead, rbac.ResourceWorkspaceProxy) == nil {
 			return api.fetchWorkspaceProxies(ctx)
 		}
 		return api.fetchRegions(ctx)
 	}
-	api.tailnetService, err = tailnet.NewClientService(
-		api.Logger.Named("tailnetclient"),
-		&api.AGPL.TailnetCoordinator,
-		api.Options.DERPMapUpdateFrequency,
-		api.AGPL.DERPMap,
-	)
+	api.tailnetService, err = tailnet.NewClientService(agpltailnet.ClientServiceOptions{
+		Logger:                  api.Logger.Named("tailnetclient"),
+		CoordPtr:                &api.AGPL.TailnetCoordinator,
+		DERPMapUpdateFrequency:  api.Options.DERPMapUpdateFrequency,
+		DERPMapFn:               api.AGPL.DERPMap,
+		NetworkTelemetryHandler: api.AGPL.NetworkTelemetryBatcher.Handler,
+	})
 	if err != nil {
 		api.Logger.Fatal(api.ctx, "failed to initialize tailnet client service", slog.Error(err))
 	}
@@ -325,6 +327,7 @@ func New(ctx context.Context, options *Options) (_ *API, err error) {
 				r.Put("/", api.putAppearance)
 			})
 		})
+
 		r.Route("/users/{user}/quiet-hours", func(r chi.Router) {
 			r.Use(
 				api.autostopRequirementEnabledMW,
@@ -494,7 +497,7 @@ func (api *API) writeEntitlementWarningsHeader(a rbac.Subject, header http.Heade
 		// The member role is implied, and not assignable.
 		// If there is no display name, then the role is also unassigned.
 		// This is not the ideal logic, but works for now.
-		if role.Name == rbac.RoleMember() || (role.DisplayName == "") {
+		if role.Identifier == rbac.RoleMember() || (role.DisplayName == "") {
 			continue
 		}
 		nonMemberRoles++
@@ -741,6 +744,11 @@ func (api *API) updateEntitlements(ctx context.Context) error {
 			ps = portsharing.NewEnterprisePortSharer()
 		}
 		api.AGPL.PortSharer.Store(&ps)
+	}
+
+	if initial, changed, enabled := featureChanged(codersdk.FeatureCustomRoles); shouldUpdate(initial, changed, enabled) {
+		var handler coderd.CustomRoleHandler = &enterpriseCustomRoleHandler{API: api, Enabled: enabled}
+		api.AGPL.CustomRoleHandler.Store(&handler)
 	}
 
 	// External token encryption is soft-enforced
@@ -1016,6 +1024,6 @@ func (api *API) runEntitlementsLoop(ctx context.Context) {
 	}
 }
 
-func (api *API) Authorize(r *http.Request, action rbac.Action, object rbac.Objecter) bool {
+func (api *API) Authorize(r *http.Request, action policy.Action, object rbac.Objecter) bool {
 	return api.AGPL.HTTPAuth.Authorize(r, action, object)
 }

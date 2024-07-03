@@ -19,8 +19,8 @@ func (r *RootCmd) templateVersions() *serpent.Command {
 		Use:     "versions",
 		Short:   "Manage different versions of the specified template",
 		Aliases: []string{"version"},
-		Long: formatExamples(
-			example{
+		Long: FormatExamples(
+			Example{
 				Description: "List versions of a specific template",
 				Command:     "coder templates versions list my-template",
 			},
@@ -51,6 +51,7 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 		cliui.JSONFormat(),
 	)
 	client := new(codersdk.Client)
+	orgContext := NewOrganizationContext()
 
 	var includeArchived serpent.Bool
 
@@ -93,7 +94,7 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 			},
 		},
 		Handler: func(inv *serpent.Invocation) error {
-			organization, err := CurrentOrganization(r, inv, client)
+			organization, err := orgContext.Selected(inv, client)
 			if err != nil {
 				return xerrors.Errorf("get current organization: %w", err)
 			}
@@ -122,6 +123,7 @@ func (r *RootCmd) templateVersionsList() *serpent.Command {
 		},
 	}
 
+	orgContext.AttachOptions(cmd)
 	formatter.AttachOptions(&cmd.Options)
 	return cmd
 }

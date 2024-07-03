@@ -8,10 +8,33 @@
       "icon_path": "./images/icons/home.svg",
       "children": [
         {
-          "title": "Architecture",
-          "description": "Learn how Coder works",
-          "path": "./about/architecture.md",
-          "icon_path": "./images/icons/protractor.svg"
+          "title": "Screenshots",
+          "description": "Browse screenshots of the Coder platform",
+          "path": "./about/screenshots.md"
+        }
+      ]
+    },
+    {
+      "title": "Architecture",
+      "description": "Learn about validated and reference architectures for Coder",
+      "path": "./architecture/architecture.md",
+      "icon_path": "./images/icons/container.svg",
+      "children": [
+        {
+          "title": "Validated Architecture",
+          "path": "./architecture/validated-arch.md"
+        },
+        {
+          "title": "Up to 1,000 users",
+          "path": "./architecture/1k-users.md"
+        },
+        {
+          "title": "Up to 2,000 users",
+          "path": "./architecture/2k-users.md"
+        },
+        {
+          "title": "Up to 3,000 users",
+          "path": "./architecture/3k-users.md"
         }
       ]
     },
@@ -144,6 +167,12 @@
           "path": "./templates/best-practices.md",
           "children": [
             {
+              "title": "Template Dependencies",
+              "description": "Manage dependencies of your templates",
+              "path": "./templates/dependencies.md",
+              "icon_path": "./images/icons/dependency.svg"
+            },
+            {
               "title": "Change management",
               "description": "Versioning templates with git and CI",
               "path": "./templates/change-management.md",
@@ -199,6 +228,11 @@
           "title": "Variables",
           "description": "Prompt the template administrator for additional information about a template",
           "path": "./templates/variables.md"
+        },
+        {
+          "title": "Workspace Tags",
+          "description": "Control provisioning using Workspace Tags and Parameters",
+          "path": "./templates/workspace-tags.md"
         },
         {
           "title": "Administering templates",
@@ -279,6 +313,11 @@
           "title": "JetBrains Gateway",
           "description": "Learn how to configure JetBrains Gateway for your workspaces",
           "path": "./ides/gateway.md"
+        },
+        {
+          "title": "JetBrains Fleet",
+          "description": "Learn how to configure JetBrains Fleet for your workspaces",
+          "path": "./ides/fleet.md"
         },
         {
           "title": "Emacs",
@@ -381,26 +420,12 @@
         {
           "title": "Scaling Coder",
           "description": "Learn how to use load testing tools",
-          "path": "./admin/scale.md",
-          "icon_path": "./images/icons/scale.svg"
-        },
-        {
-          "title": "Reference Architectures",
-          "description": "Learn about reference architectures for Coder",
-          "path": "./admin/architectures/index.md",
+          "path": "./admin/scaling/scale-testing.md",
           "icon_path": "./images/icons/scale.svg",
           "children": [
             {
-              "title": "Up to 1,000 users",
-              "path": "./admin/architectures/1k-users.md"
-            },
-            {
-              "title": "Up to 2,000 users",
-              "path": "./admin/architectures/2k-users.md"
-            },
-            {
-              "title": "Up to 3,000 users",
-              "path": "./admin/architectures/3k-users.md"
+              "title": "Scaling Utility",
+              "path": "./admin/scaling/scale-utility.md"
             }
           ]
         },
@@ -1096,8 +1121,8 @@
           "path": "./guides/artifactory-integration.md"
         },
         {
-          "title": "Island Secure Browser Integration",
-          "description": "Integrate Coder with Island's Secure Browser",
+          "title": "Island Enterprise Browser Integration",
+          "description": "Integrate Coder with Island's Enterprise Browser",
           "path": "./guides/island-integration.md"
         },
         {

@@ -21,7 +21,7 @@ import (
 	"github.com/coder/coder/v2/coderd/database/dbtime"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
-	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/coderd/telemetry"
 	"github.com/coder/coder/v2/coderd/workspaceapps"
 	"github.com/coder/coder/v2/coderd/workspaceapps/appurl"
@@ -518,7 +518,7 @@ func (api *API) workspaceProxyReportAppStats(rw http.ResponseWriter, r *http.Req
 	api.Logger.Debug(ctx, "report app stats", slog.F("stats", req.Stats))
 
 	reporter := api.WorkspaceAppsStatsCollectorOptions.Reporter
-	if err := reporter.Report(ctx, req.Stats); err != nil {
+	if err := reporter.ReportAppStats(ctx, req.Stats); err != nil {
 		api.Logger.Error(ctx, "report app stats failed", slog.Error(err))
 		httpapi.InternalServerError(rw, err)
 		return
@@ -799,7 +799,7 @@ func (api *API) workspaceProxyDeregister(rw http.ResponseWriter, r *http.Request
 func (api *API) reconnectingPTYSignedToken(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKey := httpmw.APIKey(r)
-	if !api.Authorize(r, rbac.ActionCreate, apiKey) {
+	if !api.Authorize(r, policy.ActionCreate, apiKey) {
 		httpapi.ResourceNotFound(rw)
 		return
 	}

@@ -15,6 +15,7 @@ import (
 	"go.uber.org/goleak"
 
 	"cdr.dev/slog/sloggers/slogtest"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 
 	agplaudit "github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/coderdtest"
@@ -496,10 +497,10 @@ func testDBAuthzRole(ctx context.Context) context.Context {
 		ID: uuid.Nil.String(),
 		Roles: rbac.Roles([]rbac.Role{
 			{
-				Name:        "testing",
+				Identifier:  rbac.RoleIdentifier{Name: "testing"},
 				DisplayName: "Unit Tests",
-				Site: rbac.Permissions(map[string][]rbac.Action{
-					rbac.ResourceWildcard.Type: {rbac.WildcardSymbol},
+				Site: rbac.Permissions(map[string][]policy.Action{
+					rbac.ResourceWildcard.Type: {policy.WildcardSymbol},
 				}),
 				Org:  map[string][]rbac.Permission{},
 				User: []rbac.Permission{},

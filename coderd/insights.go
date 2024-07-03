@@ -17,6 +17,7 @@ import (
 	"github.com/coder/coder/v2/coderd/database/db2sdk"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/rbac"
+	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/coderd/util/slice"
 	"github.com/coder/coder/v2/codersdk"
 )
@@ -29,10 +30,11 @@ const insightsTimeLayout = time.RFC3339
 // @Security CoderSessionToken
 // @Produce json
 // @Tags Insights
+// @Param tz_offset query int true "Time-zone offset (e.g. -2)"
 // @Success 200 {object} codersdk.DAUsResponse
 // @Router /insights/daus [get]
 func (api *API) deploymentDAUs(rw http.ResponseWriter, r *http.Request) {
-	if !api.Authorize(r, rbac.ActionRead, rbac.ResourceDeploymentValues) {
+	if !api.Authorize(r, policy.ActionRead, rbac.ResourceDeploymentConfig) {
 		httpapi.Forbidden(rw)
 		return
 	}
@@ -99,8 +101,9 @@ func (api *API) returnDAUsInternal(rw http.ResponseWriter, r *http.Request, temp
 // @Security CoderSessionToken
 // @Produce json
 // @Tags Insights
-// @Param before query int true "Start time"
-// @Param after query int true "End time"
+// @Param start_time query string true "Start time" format(date-time)
+// @Param end_time query string true "End time" format(date-time)
+// @Param template_ids query []string false "Template IDs" collectionFormat(csv)
 // @Success 200 {object} codersdk.UserActivityInsightsResponse
 // @Router /insights/user-activity [get]
 func (api *API) insightsUserActivity(rw http.ResponseWriter, r *http.Request) {
@@ -201,8 +204,9 @@ func (api *API) insightsUserActivity(rw http.ResponseWriter, r *http.Request) {
 // @Security CoderSessionToken
 // @Produce json
 // @Tags Insights
-// @Param before query int true "Start time"
-// @Param after query int true "End time"
+// @Param start_time query string true "Start time" format(date-time)
+// @Param end_time query string true "End time" format(date-time)
+// @Param template_ids query []string false "Template IDs" collectionFormat(csv)
 // @Success 200 {object} codersdk.UserLatencyInsightsResponse
 // @Router /insights/user-latency [get]
 func (api *API) insightsUserLatency(rw http.ResponseWriter, r *http.Request) {
@@ -293,8 +297,10 @@ func (api *API) insightsUserLatency(rw http.ResponseWriter, r *http.Request) {
 // @Security CoderSessionToken
 // @Produce json
 // @Tags Insights
-// @Param before query int true "Start time"
-// @Param after query int true "End time"
+// @Param start_time query string true "Start time" format(date-time)
+// @Param end_time query string true "End time" format(date-time)
+// @Param interval query string true "Interval" enums(week,day)
+// @Param template_ids query []string false "Template IDs" collectionFormat(csv)
 // @Success 200 {object} codersdk.TemplateInsightsResponse
 // @Router /insights/templates [get]
 func (api *API) insightsTemplates(rw http.ResponseWriter, r *http.Request) {
@@ -542,6 +548,7 @@ func convertTemplateInsightsApps(usage database.GetTemplateInsightsRow, appUsage
 			Slug:        app.Slug,
 			Icon:        app.Icon,
 			Seconds:     app.UsageSeconds,
+			TimesUsed:   app.TimesUsed,
 		})
 	}
 

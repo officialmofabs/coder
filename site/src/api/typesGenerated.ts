@@ -49,7 +49,7 @@ export interface AppearanceConfig {
   readonly application_name: string;
   readonly logo_url: string;
   readonly service_banner: BannerConfig;
-  readonly notification_banners: readonly BannerConfig[];
+  readonly announcement_banners: readonly BannerConfig[];
   readonly support_links?: readonly LinkConfig[];
 }
 
@@ -67,6 +67,7 @@ export interface ArchiveTemplateVersionsResponse {
 // From codersdk/roles.go
 export interface AssignableRoles extends Role {
   readonly assignable: boolean;
+  readonly built_in: boolean;
 }
 
 // From codersdk/audit.go
@@ -134,7 +135,7 @@ export interface AuthMethods {
 // From codersdk/authorization.go
 export interface AuthorizationCheck {
   readonly object: AuthorizationObject;
-  readonly action: string;
+  readonly action: RBACAction;
 }
 
 // From codersdk/authorization.go
@@ -170,6 +171,7 @@ export interface BuildInfoResponse {
   readonly external_url: string;
   readonly version: string;
   readonly dashboard_url: string;
+  readonly telemetry: boolean;
   readonly workspace_proxy: boolean;
   readonly agent_api_version: string;
   readonly upgrade_message: string;
@@ -192,6 +194,7 @@ export interface ConvertLoginRequest {
 export interface CreateFirstUserRequest {
   readonly email: string;
   readonly username: string;
+  readonly name: string;
   readonly password: string;
   readonly trial: boolean;
   readonly trial_info: CreateFirstUserTrialInfo;
@@ -222,9 +225,12 @@ export interface CreateGroupRequest {
   readonly quota_allowance: number;
 }
 
-// From codersdk/users.go
+// From codersdk/organizations.go
 export interface CreateOrganizationRequest {
   readonly name: string;
+  readonly display_name?: string;
+  readonly description?: string;
+  readonly icon?: string;
 }
 
 // From codersdk/organizations.go
@@ -276,6 +282,7 @@ export interface CreateTestAuditLogRequest {
   readonly additional_fields?: Record<string, string>;
   readonly time?: string;
   readonly build_reason?: BuildReason;
+  readonly organization_id?: string;
 }
 
 // From codersdk/apikey.go
@@ -289,6 +296,7 @@ export interface CreateTokenRequest {
 export interface CreateUserRequest {
   readonly email: string;
   readonly username: string;
+  readonly name: string;
   readonly password: string;
   readonly login_type: LoginType;
   readonly disable_login: boolean;
@@ -505,7 +513,6 @@ export interface ExternalAuthConfig {
   readonly app_installations_url: string;
   readonly no_refresh: boolean;
   readonly scopes: readonly string[];
-  readonly extra_token_keys: readonly string[];
   readonly device_flow: boolean;
   readonly device_code_url: string;
   readonly regex: string;
@@ -755,6 +762,7 @@ export interface OIDCConfig {
   readonly scopes: string[];
   readonly ignore_email_verified: boolean;
   readonly username_field: string;
+  readonly name_field: string;
   readonly email_field: string;
   readonly auth_url_params: Record<string, string>;
   readonly ignore_user_info: boolean;
@@ -775,9 +783,12 @@ export interface OIDCConfig {
 export interface Organization {
   readonly id: string;
   readonly name: string;
+  readonly display_name: string;
+  readonly description: string;
   readonly created_at: string;
   readonly updated_at: string;
   readonly is_default: boolean;
+  readonly icon: string;
 }
 
 // From codersdk/organizations.go
@@ -786,7 +797,12 @@ export interface OrganizationMember {
   readonly organization_id: string;
   readonly created_at: string;
   readonly updated_at: string;
-  readonly roles: readonly Role[];
+  readonly roles: readonly SlimRole[];
+}
+
+// From codersdk/organizations.go
+export interface OrganizationMemberWithName extends OrganizationMember {
+  readonly username: string;
 }
 
 // From codersdk/pagination.go
@@ -821,11 +837,24 @@ export interface PatchWorkspaceProxy {
   readonly regenerate_token: boolean;
 }
 
+// From codersdk/roles.go
+export interface Permission {
+  readonly negate: boolean;
+  readonly resource_type: RBACResource;
+  readonly action: RBACAction;
+}
+
 // From codersdk/oauth2.go
 export interface PostOAuth2ProviderAppRequest {
   readonly name: string;
   readonly callback_url: string;
   readonly icon: string;
+}
+
+// From codersdk/workspaces.go
+export interface PostWorkspaceUsageRequest {
+  readonly agent_id: string;
+  readonly app_name: UsageAppName;
 }
 
 // From codersdk/deployment.go
@@ -969,7 +998,11 @@ export interface Response {
 // From codersdk/roles.go
 export interface Role {
   readonly name: string;
+  readonly organization_id?: string;
   readonly display_name: string;
+  readonly site_permissions: readonly Permission[];
+  readonly organization_permissions: readonly Permission[];
+  readonly user_permissions: readonly Permission[];
 }
 
 // From codersdk/deployment.go
@@ -1014,6 +1047,13 @@ export interface SessionLifetime {
   readonly max_token_lifetime?: number;
 }
 
+// From codersdk/roles.go
+export interface SlimRole {
+  readonly name: string;
+  readonly display_name: string;
+  readonly organization_id?: string;
+}
+
 // From codersdk/deployment.go
 export interface SupportConfig {
   readonly links: readonly LinkConfig[];
@@ -1053,6 +1093,7 @@ export interface Template {
   readonly created_at: string;
   readonly updated_at: string;
   readonly organization_id: string;
+  readonly organization_name: string;
   readonly name: string;
   readonly display_name: string;
   readonly provisioner: ProvisionerType;
@@ -1093,6 +1134,7 @@ export interface TemplateAppUsage {
   readonly slug: string;
   readonly icon: string;
   readonly seconds: number;
+  readonly times_used: number;
 }
 
 // From codersdk/templates.go
@@ -1290,7 +1332,7 @@ export interface UpdateAppearanceConfig {
   readonly application_name: string;
   readonly logo_url: string;
   readonly service_banner: BannerConfig;
-  readonly notification_banners: readonly BannerConfig[];
+  readonly announcement_banners: readonly BannerConfig[];
 }
 
 // From codersdk/updatecheck.go
@@ -1298,6 +1340,14 @@ export interface UpdateCheckResponse {
   readonly current: boolean;
   readonly version: string;
   readonly url: string;
+}
+
+// From codersdk/organizations.go
+export interface UpdateOrganizationRequest {
+  readonly name?: string;
+  readonly display_name?: string;
+  readonly description?: string;
+  readonly icon?: string;
 }
 
 // From codersdk/users.go
@@ -1404,7 +1454,7 @@ export interface UpsertWorkspaceAgentPortShareRequest {
 // From codersdk/users.go
 export interface User extends ReducedUser {
   readonly organization_ids: readonly string[];
-  readonly roles: readonly Role[];
+  readonly roles: readonly SlimRole[];
 }
 
 // From codersdk/insights.go
@@ -1524,6 +1574,7 @@ export interface Workspace {
   readonly owner_name: string;
   readonly owner_avatar_url: string;
   readonly organization_id: string;
+  readonly organization_name: string;
   readonly template_id: string;
   readonly template_name: string;
   readonly template_display_name: string;
@@ -1909,12 +1960,16 @@ export const Entitlements: Entitlement[] = [
 // From codersdk/deployment.go
 export type Experiment =
   | "auto-fill-parameters"
+  | "custom-roles"
   | "example"
-  | "multi-organization";
+  | "multi-organization"
+  | "workspace-usage";
 export const Experiments: Experiment[] = [
   "auto-fill-parameters",
+  "custom-roles",
   "example",
   "multi-organization",
+  "workspace-usage",
 ];
 
 // From codersdk/deployment.go
@@ -1925,6 +1980,7 @@ export type FeatureName =
   | "audit_log"
   | "browser_only"
   | "control_shared_ports"
+  | "custom_roles"
   | "external_provisioner_daemons"
   | "external_token_encryption"
   | "high_availability"
@@ -1942,6 +1998,7 @@ export const FeatureNames: FeatureName[] = [
   "audit_log",
   "browser_only",
   "control_shared_ports",
+  "custom_roles",
   "external_provisioner_daemons",
   "external_token_encryption",
   "high_availability",
@@ -2055,10 +2112,41 @@ export const ProxyHealthStatuses: ProxyHealthStatus[] = [
   "unregistered",
 ];
 
-// From codersdk/rbacresources.go
-export type RBACResource =
-  | "api_key"
+// From codersdk/rbacresources_gen.go
+export type RBACAction =
   | "application_connect"
+  | "assign"
+  | "create"
+  | "delete"
+  | "read"
+  | "read_personal"
+  | "ssh"
+  | "start"
+  | "stop"
+  | "update"
+  | "update_personal"
+  | "use"
+  | "view_insights";
+export const RBACActions: RBACAction[] = [
+  "application_connect",
+  "assign",
+  "create",
+  "delete",
+  "read",
+  "read_personal",
+  "ssh",
+  "start",
+  "stop",
+  "update",
+  "update_personal",
+  "use",
+  "view_insights",
+];
+
+// From codersdk/rbacresources_gen.go
+export type RBACResource =
+  | "*"
+  | "api_key"
   | "assign_org_role"
   | "assign_role"
   | "audit_log"
@@ -2068,22 +2156,23 @@ export type RBACResource =
   | "file"
   | "group"
   | "license"
+  | "oauth2_app"
+  | "oauth2_app_code_token"
+  | "oauth2_app_secret"
   | "organization"
   | "organization_member"
   | "provisioner_daemon"
   | "replicas"
   | "system"
+  | "tailnet_coordinator"
   | "template"
-  | "template_insights"
   | "user"
-  | "user_data"
-  | "user_workspace_build_parameters"
   | "workspace"
-  | "workspace_execution"
+  | "workspace_dormant"
   | "workspace_proxy";
 export const RBACResources: RBACResource[] = [
+  "*",
   "api_key",
-  "application_connect",
   "assign_org_role",
   "assign_role",
   "audit_log",
@@ -2093,18 +2182,19 @@ export const RBACResources: RBACResource[] = [
   "file",
   "group",
   "license",
+  "oauth2_app",
+  "oauth2_app_code_token",
+  "oauth2_app_secret",
   "organization",
   "organization_member",
   "provisioner_daemon",
   "replicas",
   "system",
+  "tailnet_coordinator",
   "template",
-  "template_insights",
   "user",
-  "user_data",
-  "user_workspace_build_parameters",
   "workspace",
-  "workspace_execution",
+  "workspace_dormant",
   "workspace_proxy",
 ];
 
@@ -2112,6 +2202,7 @@ export const RBACResources: RBACResource[] = [
 export type ResourceType =
   | "api_key"
   | "convert_login"
+  | "custom_role"
   | "git_ssh_key"
   | "group"
   | "health_settings"
@@ -2128,6 +2219,7 @@ export type ResourceType =
 export const ResourceTypes: ResourceType[] = [
   "api_key",
   "convert_login",
+  "custom_role",
   "git_ssh_key",
   "group",
   "health_settings",
@@ -2170,6 +2262,15 @@ export const TemplateRoles: TemplateRole[] = ["", "admin", "use"];
 export type TemplateVersionWarning = "UNSUPPORTED_WORKSPACES";
 export const TemplateVersionWarnings: TemplateVersionWarning[] = [
   "UNSUPPORTED_WORKSPACES",
+];
+
+// From codersdk/workspaces.go
+export type UsageAppName = "jetbrains" | "reconnecting-pty" | "ssh" | "vscode";
+export const UsageAppNames: UsageAppName[] = [
+  "jetbrains",
+  "reconnecting-pty",
+  "ssh",
+  "vscode",
 ];
 
 // From codersdk/users.go
@@ -2376,7 +2477,6 @@ export interface HealthcheckReport {
   readonly time: string;
   readonly healthy: boolean;
   readonly severity: HealthSeverity;
-  readonly failing_sections: readonly HealthSection[];
   readonly derp: DERPHealthReport;
   readonly access_url: AccessURLReport;
   readonly websocket: WebsocketReport;
