@@ -20,6 +20,7 @@ import (
 	"storj.io/drpc/drpcserver"
 
 	"cdr.dev/slog"
+
 	"github.com/coder/coder/v2/coderd"
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/db2sdk"
@@ -336,6 +337,7 @@ func (api *API) provisionerDaemonServe(rw http.ResponseWriter, r *http.Request) 
 			ExternalAuthConfigs: api.ExternalAuthConfigs,
 			OIDCConfig:          api.OIDCConfig,
 		},
+		api.NotificationsEnqueuer,
 	)
 	if err != nil {
 		if !xerrors.Is(err, context.Canceled) {

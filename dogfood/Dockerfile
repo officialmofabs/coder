@@ -8,7 +8,7 @@ FROM ubuntu:jammy AS go
 
 RUN apt-get update && apt-get install --yes curl gcc
 # Install Go manually, so that we can control the version
-ARG GO_VERSION=1.22.4
+ARG GO_VERSION=1.22.5
 RUN mkdir --parents /usr/local/go
 
 # Boring Go is needed to build FIPS-compliant binaries.
@@ -206,7 +206,7 @@ RUN apt-get update && \
 	google-chrome-stable microsoft-edge-beta && \
 	# Pre-install system dependencies that Playwright needs. npx doesn't work here
 	# for some reason. See https://github.com/microsoft/playwright-cli/issues/136
-	npm i -g playwright@1.36.2 pnpm@^8 corepack && playwright install-deps && \
+	npm i -g playwright@1.36.2 pnpm@^9 corepack && playwright install-deps && \
 	npm cache clean --force
 
 # Ensure PostgreSQL binaries are in the users $PATH.

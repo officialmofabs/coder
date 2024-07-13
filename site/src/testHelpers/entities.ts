@@ -365,6 +365,7 @@ export const SuspendedMockUser: TypesGen.User = {
 export const MockProvisioner: TypesGen.ProvisionerDaemon = {
   created_at: "2022-05-17T17:39:01.382927298Z",
   id: "test-provisioner",
+  organization_id: MockOrganization.id,
   name: "Test Provisioner",
   provisioners: ["echo"],
   tags: { scope: "organization" },
@@ -375,6 +376,7 @@ export const MockProvisioner: TypesGen.ProvisionerDaemon = {
 export const MockUserProvisioner: TypesGen.ProvisionerDaemon = {
   created_at: "2022-05-17T17:39:01.382927298Z",
   id: "test-user-provisioner",
+  organization_id: MockOrganization.id,
   name: "Test User Provisioner",
   provisioners: ["echo"],
   tags: { scope: "user", owner: "12345678-abcd-1234-abcd-1234567890abcd" },
@@ -481,6 +483,8 @@ export const MockTemplate: TypesGen.Template = {
   updated_at: "2022-05-18T17:39:01.382927298Z",
   organization_id: MockOrganization.id,
   organization_name: "default",
+  organization_display_name: "Default",
+  organization_icon: "/emojis/1f5fa.png",
   name: "test-template",
   display_name: "Test Template",
   provisioner: MockProvisioner.provisioners[0],
@@ -3219,6 +3223,7 @@ export const MockHealth: TypesGen.HealthcheckReport = {
       {
         provisioner_daemon: {
           id: "e455b582-ac04-4323-9ad6-ab71301fa006",
+          organization_id: MockOrganization.id,
           created_at: "2024-01-04T15:53:03.21563Z",
           last_seen_at: "2024-01-04T16:05:03.967551Z",
           name: "ok",
@@ -3239,6 +3244,7 @@ export const MockHealth: TypesGen.HealthcheckReport = {
       {
         provisioner_daemon: {
           id: "00000000-0000-0000-000000000000",
+          organization_id: MockOrganization.id,
           created_at: "2024-01-04T15:53:03.21563Z",
           last_seen_at: "2024-01-04T16:05:03.967551Z",
           name: "user-scoped",
@@ -3259,6 +3265,7 @@ export const MockHealth: TypesGen.HealthcheckReport = {
       {
         provisioner_daemon: {
           id: "e455b582-ac04-4323-9ad6-ab71301fa006",
+          organization_id: MockOrganization.id,
           created_at: "2024-01-04T15:53:03.21563Z",
           last_seen_at: "2024-01-04T16:05:03.967551Z",
           name: "unhappy",
@@ -3414,6 +3421,7 @@ export const DeploymentHealthUnhealthy: TypesGen.HealthcheckReport = {
       {
         provisioner_daemon: {
           id: "e455b582-ac04-4323-9ad6-ab71301fa006",
+          organization_id: MockOrganization.id,
           created_at: "2024-01-04T15:53:03.21563Z",
           last_seen_at: "2024-01-04T16:05:03.967551Z",
           name: "vvuurrkk-2",
