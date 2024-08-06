@@ -12,7 +12,7 @@ import type { FileTree } from "utils/filetree";
 import type { TemplateVersionFiles } from "utils/templateVersion";
 
 export const MockOrganization: TypesGen.Organization = {
-  id: "fc0774ce-cc9e-48d4-80ae-88f7a4d4a8b0",
+  id: "my-organization-id",
   name: "my-organization",
   display_name: "My Organization",
   description: "An organization that gets used for stuff.",
@@ -25,6 +25,17 @@ export const MockOrganization: TypesGen.Organization = {
 export const MockDefaultOrganization: TypesGen.Organization = {
   ...MockOrganization,
   is_default: true,
+};
+
+export const MockOrganization2: TypesGen.Organization = {
+  id: "my-organization-2-id",
+  name: "my-organization-2",
+  display_name: "My Organization 2",
+  description: "Another organization that gets used for stuff.",
+  icon: "/emojis/1f957.png",
+  created_at: "",
+  updated_at: "",
+  is_default: false,
 };
 
 export const MockTemplateDAUResponse: TypesGen.DAUsResponse = {
@@ -265,11 +276,6 @@ export const MockTemplateAdminRole: TypesGen.Role = {
   organization_id: "",
 };
 
-export const MockMemberRole: TypesGen.SlimRole = {
-  name: "member",
-  display_name: "Member",
-};
-
 export const MockAuditorRole: TypesGen.Role = {
   name: "auditor",
   display_name: "Auditor",
@@ -277,6 +283,47 @@ export const MockAuditorRole: TypesGen.Role = {
   organization_permissions: [],
   user_permissions: [],
   organization_id: "",
+};
+
+export const MockMemberRole: TypesGen.SlimRole = {
+  name: "member",
+  display_name: "Member",
+};
+
+export const MockOrganizationAdminRole: TypesGen.Role = {
+  name: "organization-admin",
+  display_name: "Organization Admin",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: MockOrganization.id,
+};
+
+export const MockOrganizationUserAdminRole: TypesGen.Role = {
+  name: "organization-user-admin",
+  display_name: "Organization User Admin",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: MockOrganization.id,
+};
+
+export const MockOrganizationTemplateAdminRole: TypesGen.Role = {
+  name: "organization-template-admin",
+  display_name: "Organization Template Admin",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: MockOrganization.id,
+};
+
+export const MockOrganizationAuditorRole: TypesGen.Role = {
+  name: "organization-auditor",
+  display_name: "Organization Auditor",
+  site_permissions: [],
+  organization_permissions: [],
+  user_permissions: [],
+  organization_id: MockOrganization.id,
 };
 
 // assignableRole takes a role and a boolean. The boolean implies if the
@@ -319,19 +366,8 @@ export const MockUser: TypesGen.User = {
 };
 
 export const MockUserAdmin: TypesGen.User = {
-  id: "test-user",
-  username: "TestUser",
-  email: "test@coder.com",
-  created_at: "",
-  updated_at: "",
-  status: "active",
-  organization_ids: [MockOrganization.id],
+  ...MockUser,
   roles: [MockUserAdminRole],
-  avatar_url: "",
-  last_seen_at: "",
-  login_type: "password",
-  theme_preference: "",
-  name: "",
 };
 
 export const MockUser2: TypesGen.User = {
@@ -365,6 +401,33 @@ export const SuspendedMockUser: TypesGen.User = {
   theme_preference: "",
   name: "",
 };
+
+export const MockOrganizationMember: TypesGen.OrganizationMemberWithUserData = {
+  organization_id: MockOrganization.id,
+  user_id: MockUser.id,
+  username: MockUser.username,
+  email: MockUser.email,
+  created_at: "",
+  updated_at: "",
+  name: MockUser.name,
+  avatar_url: MockUser.avatar_url,
+  global_roles: MockUser.roles,
+  roles: [],
+};
+
+export const MockOrganizationMember2: TypesGen.OrganizationMemberWithUserData =
+  {
+    organization_id: MockOrganization.id,
+    user_id: MockUser2.id,
+    username: MockUser2.username,
+    email: MockUser2.email,
+    created_at: "",
+    updated_at: "",
+    name: MockUser2.name,
+    avatar_url: MockUser2.avatar_url,
+    global_roles: MockUser2.roles,
+    roles: [],
+  };
 
 export const MockProvisioner: TypesGen.ProvisionerDaemon = {
   created_at: "2022-05-17T17:39:01.382927298Z",
@@ -486,8 +549,8 @@ export const MockTemplate: TypesGen.Template = {
   created_at: "2022-05-17T17:39:01.382927298Z",
   updated_at: "2022-05-18T17:39:01.382927298Z",
   organization_id: MockOrganization.id,
-  organization_name: "default",
-  organization_display_name: "Default",
+  organization_name: MockOrganization.name,
+  organization_display_name: MockOrganization.display_name,
   organization_icon: "/emojis/1f5fa.png",
   name: "test-template",
   display_name: "Test Template",
@@ -2146,13 +2209,33 @@ export const MockEntitlementsWithUserLimit: TypesGen.Entitlements = {
   }),
 };
 
+export const MockEntitlementsWithMultiOrg: TypesGen.Entitlements = {
+  ...MockEntitlements,
+  has_license: true,
+  features: withDefaultFeatures({
+    multiple_organizations: {
+      enabled: true,
+      entitlement: "entitled",
+    },
+  }),
+};
+
 export const MockExperiments: TypesGen.Experiment[] = [];
 
+/**
+ * An audit log for MockOrganization.
+ */
 export const MockAuditLog: TypesGen.AuditLog = {
   id: "fbd2116a-8961-4954-87ae-e4575bd29ce0",
   request_id: "53bded77-7b9d-4e82-8771-991a34d759f9",
   time: "2022-05-19T16:45:57.122Z",
   organization_id: MockOrganization.id,
+  organization: {
+    id: MockOrganization.id,
+    name: MockOrganization.name,
+    display_name: MockOrganization.display_name,
+    icon: MockOrganization.icon,
+  },
   ip: "127.0.0.1",
   user_agent:
     '"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"',
@@ -2176,12 +2259,22 @@ export const MockAuditLog: TypesGen.AuditLog = {
   is_deleted: false,
 };
 
+/**
+ * An audit log for MockOrganization2.
+ */
 export const MockAuditLog2: TypesGen.AuditLog = {
   ...MockAuditLog,
   id: "53bded77-7b9d-4e82-8771-991a34d759f9",
   action: "write",
   time: "2022-05-20T16:45:57.122Z",
   description: "{user} updated workspace {target}",
+  organization_id: MockOrganization2.id,
+  organization: {
+    id: MockOrganization2.id,
+    name: MockOrganization2.name,
+    display_name: MockOrganization2.display_name,
+    icon: MockOrganization2.icon,
+  },
   diff: {
     workspace_name: {
       old: "old-workspace-name",
@@ -2204,6 +2297,37 @@ export const MockAuditLog2: TypesGen.AuditLog = {
       secret: false,
     },
   },
+};
+
+/**
+ * An audit log without an organization.
+ */
+export const MockAuditLog3: TypesGen.AuditLog = {
+  id: "8efa9208-656a-422d-842d-b9dec0cf1bf3",
+  request_id: "57ee9510-8330-480d-9ffa-4024e5805465",
+  time: "2024-06-11T01:32:11.123Z",
+  organization_id: "00000000-0000-0000-000000000000",
+  ip: "127.0.0.1",
+  user_agent:
+    '"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"',
+  resource_type: "template",
+  resource_id: "a624458c-1562-4689-a671-42c0b7d2d0c5",
+  resource_target: "docker",
+  resource_icon: "",
+  action: "write",
+  diff: {
+    display_name: {
+      old: "old display",
+      new: "new display",
+      secret: false,
+    },
+  },
+  status_code: 200,
+  additional_fields: {},
+  description: "{user} updated template {target}",
+  user: MockUser,
+  resource_link: "/templates/docker",
+  is_deleted: false,
 };
 
 export const MockWorkspaceCreateAuditLogForDifferentOwner = {
@@ -2359,19 +2483,24 @@ export const MockTemplateExample2: TypesGen.TemplateExample = {
 };
 
 export const MockPermissions: Permissions = {
-  createGroup: true,
   createTemplates: true,
   createUser: true,
   deleteTemplates: true,
   updateTemplates: true,
-  readAllUsers: true,
+  viewAllUsers: true,
   updateUsers: true,
-  viewAuditLog: true,
+  viewAnyAuditLog: true,
   viewDeploymentValues: true,
+  editDeploymentValues: true,
   viewUpdateCheck: true,
   viewDeploymentStats: true,
   viewExternalAuthConfig: true,
   editWorkspaceProxies: true,
+  createOrganization: true,
+  editAnyOrganization: true,
+  viewAnyGroup: true,
+  createGroup: true,
+  viewAllLicenses: true,
 };
 
 export const MockDeploymentConfig: DeploymentConfig = {
@@ -2498,6 +2627,34 @@ export const MockWorkspaceAgentLogs: TypesGen.WorkspaceAgentLog[] = [
 ];
 
 export const MockLicenseResponse: GetLicensesResponse[] = [
+  {
+    id: 1,
+    uploaded_at: "1660104000",
+    expires_at: "3420244800", // expires on 5/20/2078
+    uuid: "1",
+    claims: {
+      trial: false,
+      all_features: true,
+      feature_set: "enterprise",
+      version: 1,
+      features: {},
+      license_expires: 3420244800,
+    },
+  },
+  {
+    id: 1,
+    uploaded_at: "1660104000",
+    expires_at: "3420244800", // expires on 5/20/2078
+    uuid: "1",
+    claims: {
+      trial: false,
+      all_features: true,
+      feature_set: "PREMIUM",
+      version: 1,
+      features: {},
+      license_expires: 3420244800,
+    },
+  },
   {
     id: 1,
     uploaded_at: "1660104000",

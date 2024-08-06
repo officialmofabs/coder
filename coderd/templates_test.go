@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cdr.dev/slog/sloggers/slogtest"
+
 	"github.com/coder/coder/v2/agent/agenttest"
 	"github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/coderdtest"
@@ -458,47 +459,6 @@ func TestTemplatesByOrganization(t *testing.T) {
 			require.Equal(t, tmpl.OrganizationName, org.Name, "organization name")
 			require.Equal(t, tmpl.OrganizationDisplayName, org.DisplayName, "organization display name")
 			require.Equal(t, tmpl.OrganizationIcon, org.Icon, "organization display name")
-		}
-	})
-	t.Run("MultipleOrganizations", func(t *testing.T) {
-		t.Parallel()
-		client := coderdtest.New(t, nil)
-		owner := coderdtest.CreateFirstUser(t, client)
-		org2 := coderdtest.CreateOrganization(t, client, coderdtest.CreateOrganizationOptions{})
-		user, _ := coderdtest.CreateAnotherUser(t, client, org2.ID)
-
-		// 2 templates in first organization
-		version := coderdtest.CreateTemplateVersion(t, client, owner.OrganizationID, nil)
-		version2 := coderdtest.CreateTemplateVersion(t, client, owner.OrganizationID, nil)
-		coderdtest.CreateTemplate(t, client, owner.OrganizationID, version.ID)
-		coderdtest.CreateTemplate(t, client, owner.OrganizationID, version2.ID)
-
-		// 2 in the second organization
-		version3 := coderdtest.CreateTemplateVersion(t, client, org2.ID, nil)
-		version4 := coderdtest.CreateTemplateVersion(t, client, org2.ID, nil)
-		coderdtest.CreateTemplate(t, client, org2.ID, version3.ID)
-		coderdtest.CreateTemplate(t, client, org2.ID, version4.ID)
-
-		ctx := testutil.Context(t, testutil.WaitLong)
-
-		// All 4 are viewable by the owner
-		templates, err := client.Templates(ctx, codersdk.TemplateFilter{})
-		require.NoError(t, err)
-		require.Len(t, templates, 4)
-
-		// View a single organization from the owner
-		templates, err = client.Templates(ctx, codersdk.TemplateFilter{
-			OrganizationID: owner.OrganizationID,
-		})
-		require.NoError(t, err)
-		require.Len(t, templates, 2)
-
-		// Only 2 are viewable by the org user
-		templates, err = user.Templates(ctx, codersdk.TemplateFilter{})
-		require.NoError(t, err)
-		require.Len(t, templates, 2)
-		for _, tmpl := range templates {
-			require.Equal(t, tmpl.OrganizationName, org2.Name, "organization name on template")
 		}
 	})
 }
@@ -1234,7 +1194,7 @@ func TestDeleteTemplate(t *testing.T) {
 		version := coderdtest.CreateTemplateVersion(t, client, user.OrganizationID, nil)
 		template := coderdtest.CreateTemplate(t, client, user.OrganizationID, version.ID)
 		coderdtest.AwaitTemplateVersionJobCompleted(t, client, version.ID)
-		coderdtest.CreateWorkspace(t, client, user.OrganizationID, template.ID)
+		coderdtest.CreateWorkspace(t, client, template.ID)
 
 		ctx := testutil.Context(t, testutil.WaitLong)
 
@@ -1268,7 +1228,7 @@ func TestTemplateMetrics(t *testing.T) {
 	require.Empty(t, template.BuildTimeStats[codersdk.WorkspaceTransitionStart])
 
 	coderdtest.AwaitTemplateVersionJobCompleted(t, client, version.ID)
-	workspace := coderdtest.CreateWorkspace(t, client, user.OrganizationID, template.ID)
+	workspace := coderdtest.CreateWorkspace(t, client, template.ID)
 	coderdtest.AwaitWorkspaceBuildJobCompleted(t, client, workspace.LatestBuild.ID)
 
 	_ = agenttest.New(t, client.URL, authToken)

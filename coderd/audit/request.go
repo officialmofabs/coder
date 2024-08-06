@@ -16,6 +16,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"cdr.dev/slog"
+
 	"github.com/coder/coder/v2/coderd/database"
 	"github.com/coder/coder/v2/coderd/database/dbtime"
 	"github.com/coder/coder/v2/coderd/httpmw"
@@ -49,6 +50,12 @@ type Request[T Auditable] struct {
 	// overridden such as in the case of new user authentication when the Audit
 	// Action is 'register', not 'login'.
 	Action database.AuditAction
+}
+
+// UpdateOrganizationID can be used if the organization ID is not known
+// at the initiation of an audit log request.
+func (r *Request[T]) UpdateOrganizationID(id uuid.UUID) {
+	r.params.OrganizationID = id
 }
 
 type BackgroundAuditParams[T Auditable] struct {
@@ -111,6 +118,8 @@ func ResourceTarget[T Auditable](tgt T) string {
 		return typed.Username
 	case database.Organization:
 		return typed.Name
+	case database.NotificationTemplate:
+		return typed.Name
 	default:
 		panic(fmt.Sprintf("unknown resource %T for ResourceTarget", tgt))
 	}
@@ -157,6 +166,8 @@ func ResourceID[T Auditable](tgt T) uuid.UUID {
 		return typed.UserID
 	case database.Organization:
 		return typed.ID
+	case database.NotificationTemplate:
+		return typed.ID
 	default:
 		panic(fmt.Sprintf("unknown resource %T for ResourceID", tgt))
 	}
@@ -200,6 +211,8 @@ func ResourceType[T Auditable](tgt T) database.ResourceType {
 		return database.ResourceTypeOrganizationMember
 	case database.Organization:
 		return database.ResourceTypeOrganization
+	case database.NotificationTemplate:
+		return database.ResourceTypeNotificationTemplate
 	default:
 		panic(fmt.Sprintf("unknown resource %T for ResourceType", typed))
 	}
@@ -245,6 +258,8 @@ func ResourceRequiresOrgID[T Auditable]() bool {
 		return true
 	case database.Organization:
 		return true
+	case database.NotificationTemplate:
+		return false
 	default:
 		panic(fmt.Sprintf("unknown resource %T for ResourceRequiresOrgID", tgt))
 	}
@@ -272,16 +287,16 @@ func requireOrgID[T Auditable](ctx context.Context, id uuid.UUID, log slog.Logge
 // entry.
 func InitRequestWithCancel[T Auditable](w http.ResponseWriter, p *RequestParams) (*Request[T], func(commit bool)) {
 	req, commitF := InitRequest[T](w, p)
-	cancelled := false
+	canceled := false
 	return req, func(commit bool) {
 		// Once 'commit=false' is called, block
 		// any future commit attempts.
 		if !commit {
-			cancelled = true
+			canceled = true
 			return
 		}
-		// If it was ever cancelled, block any commits
-		if !cancelled {
+		// If it was ever canceled, block any commits
+		if !canceled {
 			commitF()
 		}
 	}

@@ -1,7 +1,6 @@
 import type { MutationOptions, QueryClient, QueryOptions } from "react-query";
-import { API } from "api/api";
+import { API, type GetTemplatesOptions } from "api/api";
 import type {
-  TemplateFilter,
   CreateTemplateRequest,
   CreateTemplateVersionRequest,
   ProvisionerJob,
@@ -14,43 +13,55 @@ import type {
 import { delay } from "utils/delay";
 import { getTemplateVersionFiles } from "utils/templateVersion";
 
-export const templateByNameKey = (organizationId: string, name: string) => [
-  organizationId,
+export const templateKey = (templateId: string) => ["template", templateId];
+
+export const template = (templateId: string): QueryOptions<Template> => {
+  return {
+    queryKey: templateKey(templateId),
+    queryFn: async () => API.getTemplate(templateId),
+  };
+};
+
+export const templateByNameKey = (organization: string, name: string) => [
+  organization,
   "template",
   name,
-  "settings",
 ];
 
 export const templateByName = (
-  organizationId: string,
+  organization: string,
   name: string,
 ): QueryOptions<Template> => {
   return {
-    queryKey: templateByNameKey(organizationId, name),
-    queryFn: async () => API.getTemplateByName(organizationId, name),
+    queryKey: templateByNameKey(organization, name),
+    queryFn: async () => API.getTemplateByName(organization, name),
   };
 };
 
-const getTemplatesByOrganizationIdQueryKey = (
-  organizationId: string,
-  deprecated?: boolean,
-) => [organizationId, "templates", deprecated];
+const getTemplatesQueryKey = (options?: GetTemplatesOptions) => [
+  "templates",
+  options?.deprecated,
+];
 
-export const templatesByOrganizationId = (
-  organizationId: string,
-  deprecated?: boolean,
+export const templates = (options?: GetTemplatesOptions) => {
+  return {
+    queryKey: getTemplatesQueryKey(options),
+    queryFn: () => API.getTemplates(options),
+  };
+};
+
+const getTemplatesByOrganizationQueryKey = (
+  organization: string,
+  options?: GetTemplatesOptions,
+) => [organization, "templates", options?.deprecated];
+
+export const templatesByOrganization = (
+  organization: string,
+  options: GetTemplatesOptions = {},
 ) => {
   return {
-    queryKey: getTemplatesByOrganizationIdQueryKey(organizationId, deprecated),
-    queryFn: () =>
-      API.getTemplatesByOrganizationId(organizationId, { deprecated }),
-  };
-};
-
-export const templates = (filter?: TemplateFilter) => {
-  return {
-    queryKey: ["templates", filter],
-    queryFn: () => API.getTemplates(filter),
+    queryKey: getTemplatesByOrganizationQueryKey(organization, options),
+    queryFn: () => API.getTemplatesByOrganization(organization, options),
   };
 };
 
@@ -104,7 +115,7 @@ export const setGroupRole = (
 export const templateExamples = (organizationId: string) => {
   return {
     queryKey: [
-      ...getTemplatesByOrganizationIdQueryKey(organizationId),
+      ...getTemplatesByOrganizationQueryKey(organizationId),
       "examples",
     ],
     queryFn: () => API.getTemplateExamples(organizationId),
@@ -162,13 +173,10 @@ export const createTemplateVersion = (organizationId: string) => {
   };
 };
 
-export const createAndBuildTemplateVersion = (organizationId: string) => {
+export const createAndBuildTemplateVersion = (organization: string) => {
   return {
     mutationFn: async (request: CreateTemplateVersionRequest) => {
-      const newVersion = await API.createTemplateVersion(
-        organizationId,
-        request,
-      );
+      const newVersion = await API.createTemplateVersion(organization, request);
       await waitBuildToBeFinished(newVersion);
       return newVersion;
     },
@@ -223,7 +231,7 @@ export const createTemplate = () => {
 };
 
 export type CreateTemplateOptions = {
-  organizationId: string;
+  organization: string;
   version: CreateTemplateVersionRequest;
   template: Omit<CreateTemplateRequest, "template_version_id">;
   onCreateVersion?: (version: TemplateVersion) => void;
@@ -232,12 +240,12 @@ export type CreateTemplateOptions = {
 
 const createTemplateFn = async (options: CreateTemplateOptions) => {
   const version = await API.createTemplateVersion(
-    options.organizationId,
+    options.organization,
     options.version,
   );
   options.onCreateVersion?.(version);
   await waitBuildToBeFinished(version, options.onTemplateVersionChanges);
-  return API.createTemplate(options.organizationId, {
+  return API.createTemplate(options.organization, {
     ...options.template,
     template_version_id: version.id,
   });

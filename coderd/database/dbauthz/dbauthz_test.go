@@ -16,6 +16,7 @@ import (
 	"cdr.dev/slog"
 
 	"github.com/coder/coder/v2/coderd/database/db2sdk"
+	"github.com/coder/coder/v2/coderd/notifications"
 	"github.com/coder/coder/v2/coderd/rbac/policy"
 	"github.com/coder/coder/v2/codersdk"
 
@@ -267,6 +268,13 @@ func (s *MethodTestSuite) TestAuditLogs() {
 		check.Args(database.GetAuditLogsOffsetParams{
 			LimitOpt: 10,
 		}).Asserts(rbac.ResourceAuditLog, policy.ActionRead)
+	}))
+	s.Run("GetAuthorizedAuditLogsOffset", s.Subtest(func(db database.Store, check *expects) {
+		_ = dbgen.AuditLog(s.T(), db, database.AuditLog{})
+		_ = dbgen.AuditLog(s.T(), db, database.AuditLog{})
+		check.Args(database.GetAuditLogsOffsetParams{
+			LimitOpt: 10,
+		}, emptyPreparedAuthorized{}).Asserts(rbac.ResourceAuditLog, policy.ActionRead)
 	}))
 }
 
@@ -1098,6 +1106,12 @@ func (s *MethodTestSuite) TestUser() {
 		u := dbgen.User(s.T(), db, database.User{})
 		check.Args(u.ID).Asserts(u, policy.ActionDelete).Returns()
 	}))
+	s.Run("UpdateUserGithubComUserID", s.Subtest(func(db database.Store, check *expects) {
+		u := dbgen.User(s.T(), db, database.User{})
+		check.Args(database.UpdateUserGithubComUserIDParams{
+			ID: u.ID,
+		}).Asserts(u, policy.ActionUpdatePersonal)
+	}))
 	s.Run("UpdateUserHashedPassword", s.Subtest(func(db database.Store, check *expects) {
 		u := dbgen.User(s.T(), db, database.User{})
 		check.Args(database.UpdateUserHashedPasswordParams{
@@ -1825,6 +1839,11 @@ func (s *MethodTestSuite) TestProvisionerKeys() {
 		pk := dbgen.ProvisionerKey(s.T(), db, database.ProvisionerKey{OrganizationID: org.ID})
 		check.Args(pk.ID).Asserts(pk, policy.ActionRead).Returns(pk)
 	}))
+	s.Run("GetProvisionerKeyByHashedSecret", s.Subtest(func(db database.Store, check *expects) {
+		org := dbgen.Organization(s.T(), db, database.Organization{})
+		pk := dbgen.ProvisionerKey(s.T(), db, database.ProvisionerKey{OrganizationID: org.ID, HashedSecret: []byte("foo")})
+		check.Args([]byte("foo")).Asserts(pk, policy.ActionRead).Returns(pk)
+	}))
 	s.Run("GetProvisionerKeyByName", s.Subtest(func(db database.Store, check *expects) {
 		org := dbgen.Organization(s.T(), db, database.Organization{})
 		pk := dbgen.ProvisionerKey(s.T(), db, database.ProvisionerKey{OrganizationID: org.ID})
@@ -1862,6 +1881,19 @@ func (s *MethodTestSuite) TestExtraMethods() {
 		})
 		s.NoError(err, "insert provisioner daemon")
 		check.Args().Asserts(d, policy.ActionRead)
+	}))
+	s.Run("GetProvisionerDaemonsByOrganization", s.Subtest(func(db database.Store, check *expects) {
+		org := dbgen.Organization(s.T(), db, database.Organization{})
+		d, err := db.UpsertProvisionerDaemon(context.Background(), database.UpsertProvisionerDaemonParams{
+			OrganizationID: org.ID,
+			Tags: database.StringMap(map[string]string{
+				provisionersdk.TagScope: provisionersdk.ScopeOrganization,
+			}),
+		})
+		s.NoError(err, "insert provisioner daemon")
+		ds, err := db.GetProvisionerDaemonsByOrganization(context.Background(), org.ID)
+		s.NoError(err, "get provisioner daemon by org")
+		check.Args(org.ID).Asserts(d, policy.ActionRead).Returns(ds)
 	}))
 	s.Run("DeleteOldProvisionerDaemons", s.Subtest(func(db database.Store, check *expects) {
 		_, err := db.UpsertProvisionerDaemon(context.Background(), database.UpsertProvisionerDaemonParams{
@@ -2328,13 +2360,16 @@ func (s *MethodTestSuite) TestSystemFunctions() {
 		}).Asserts( /*rbac.ResourceSystem, policy.ActionCreate*/ )
 	}))
 	s.Run("UpsertProvisionerDaemon", s.Subtest(func(db database.Store, check *expects) {
-		pd := rbac.ResourceProvisionerDaemon.All()
+		org := dbgen.Organization(s.T(), db, database.Organization{})
+		pd := rbac.ResourceProvisionerDaemon.InOrg(org.ID)
 		check.Args(database.UpsertProvisionerDaemonParams{
+			OrganizationID: org.ID,
 			Tags: database.StringMap(map[string]string{
 				provisionersdk.TagScope: provisionersdk.ScopeOrganization,
 			}),
 		}).Asserts(pd, policy.ActionCreate)
 		check.Args(database.UpsertProvisionerDaemonParams{
+			OrganizationID: org.ID,
 			Tags: database.StringMap(map[string]string{
 				provisionersdk.TagScope: provisionersdk.ScopeUser,
 				provisionersdk.TagOwner: "11111111-1111-1111-1111-111111111111",
@@ -2527,6 +2562,10 @@ func (s *MethodTestSuite) TestSystemFunctions() {
 			AgentID:     uuid.New(),
 		}).Asserts(tpl, policy.ActionCreate)
 	}))
+}
+
+func (s *MethodTestSuite) TestNotifications() {
+	// System functions
 	s.Run("AcquireNotificationMessages", s.Subtest(func(db database.Store, check *expects) {
 		// TODO: update this test once we have a specific role for notifications
 		check.Args(database.AcquireNotificationMessagesParams{}).Asserts(rbac.ResourceSystem, policy.ActionUpdate)
@@ -2561,6 +2600,40 @@ func (s *MethodTestSuite) TestSystemFunctions() {
 			Status: database.NotificationMessageStatusLeased,
 			Limit:  10,
 		}).Asserts(rbac.ResourceSystem, policy.ActionRead)
+	}))
+
+	// Notification templates
+	s.Run("GetNotificationTemplateByID", s.Subtest(func(db database.Store, check *expects) {
+		user := dbgen.User(s.T(), db, database.User{})
+		check.Args(user.ID).Asserts(rbac.ResourceNotificationTemplate, policy.ActionRead).
+			Errors(dbmem.ErrUnimplemented)
+	}))
+	s.Run("GetNotificationTemplatesByKind", s.Subtest(func(db database.Store, check *expects) {
+		check.Args(database.NotificationTemplateKindSystem).
+			Asserts(rbac.ResourceNotificationTemplate, policy.ActionRead).
+			Errors(dbmem.ErrUnimplemented)
+	}))
+	s.Run("UpdateNotificationTemplateMethodByID", s.Subtest(func(db database.Store, check *expects) {
+		check.Args(database.UpdateNotificationTemplateMethodByIDParams{
+			Method: database.NullNotificationMethod{NotificationMethod: database.NotificationMethodWebhook, Valid: true},
+			ID:     notifications.TemplateWorkspaceDormant,
+		}).Asserts(rbac.ResourceNotificationTemplate, policy.ActionUpdate).
+			Errors(dbmem.ErrUnimplemented)
+	}))
+
+	// Notification preferences
+	s.Run("GetUserNotificationPreferences", s.Subtest(func(db database.Store, check *expects) {
+		user := dbgen.User(s.T(), db, database.User{})
+		check.Args(user.ID).
+			Asserts(rbac.ResourceNotificationPreference.WithOwner(user.ID.String()), policy.ActionRead)
+	}))
+	s.Run("UpdateUserNotificationPreferences", s.Subtest(func(db database.Store, check *expects) {
+		user := dbgen.User(s.T(), db, database.User{})
+		check.Args(database.UpdateUserNotificationPreferencesParams{
+			UserID:                  user.ID,
+			NotificationTemplateIds: []uuid.UUID{notifications.TemplateWorkspaceAutoUpdated, notifications.TemplateWorkspaceDeleted},
+			Disableds:               []bool{true, false},
+		}).Asserts(rbac.ResourceNotificationPreference.WithOwner(user.ID.String()), policy.ActionUpdate)
 	}))
 }
 

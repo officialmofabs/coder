@@ -590,6 +590,94 @@ func TestRolePermissions(t *testing.T) {
 				false: {},
 			},
 		},
+		{
+			// Any owner/admin across may access any users' preferences
+			// Members may not access other members' preferences
+			Name:     "NotificationPreferencesOwn",
+			Actions:  []policy.Action{policy.ActionRead, policy.ActionUpdate},
+			Resource: rbac.ResourceNotificationPreference.WithOwner(currentUser.String()),
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {memberMe, orgMemberMe, owner},
+				false: {
+					userAdmin, orgUserAdmin, templateAdmin,
+					orgAuditor, orgTemplateAdmin,
+					otherOrgMember, otherOrgAuditor, otherOrgUserAdmin, otherOrgTemplateAdmin,
+					orgAdmin, otherOrgAdmin,
+				},
+			},
+		},
+		{
+			// Any owner/admin may access notification templates
+			Name:     "NotificationTemplates",
+			Actions:  []policy.Action{policy.ActionRead, policy.ActionUpdate},
+			Resource: rbac.ResourceNotificationTemplate,
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {owner},
+				false: {
+					memberMe, orgMemberMe, userAdmin, orgUserAdmin, templateAdmin,
+					orgAuditor, orgTemplateAdmin,
+					otherOrgMember, otherOrgAuditor, otherOrgUserAdmin, otherOrgTemplateAdmin,
+					orgAdmin, otherOrgAdmin,
+				},
+			},
+		},
+		{
+			// Notification preferences are currently not organization-scoped
+			// Any owner/admin may access any users' preferences
+			// Members may not access other members' preferences
+			Name:     "NotificationPreferencesOtherUser",
+			Actions:  []policy.Action{policy.ActionRead, policy.ActionUpdate},
+			Resource: rbac.ResourceNotificationPreference.WithOwner(uuid.NewString()), // some other user
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {owner},
+				false: {
+					memberMe, templateAdmin, orgUserAdmin, userAdmin,
+					orgAdmin, orgAuditor, orgTemplateAdmin,
+					otherOrgMember, otherOrgAuditor, otherOrgUserAdmin, otherOrgTemplateAdmin,
+					otherOrgAdmin, orgMemberMe,
+				},
+			},
+		},
+		// AnyOrganization tests
+		{
+			Name:     "CreateOrgMember",
+			Actions:  []policy.Action{policy.ActionCreate},
+			Resource: rbac.ResourceOrganizationMember.AnyOrganization(),
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {owner, userAdmin, orgAdmin, otherOrgAdmin, orgUserAdmin, otherOrgUserAdmin},
+				false: {
+					memberMe, templateAdmin,
+					orgTemplateAdmin, orgMemberMe, orgAuditor,
+					otherOrgMember, otherOrgAuditor, otherOrgTemplateAdmin,
+				},
+			},
+		},
+		{
+			Name:     "CreateTemplateAnyOrg",
+			Actions:  []policy.Action{policy.ActionCreate},
+			Resource: rbac.ResourceTemplate.AnyOrganization(),
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {owner, templateAdmin, orgTemplateAdmin, otherOrgTemplateAdmin, orgAdmin, otherOrgAdmin},
+				false: {
+					userAdmin, memberMe,
+					orgMemberMe, orgAuditor, orgUserAdmin,
+					otherOrgMember, otherOrgAuditor, otherOrgUserAdmin,
+				},
+			},
+		},
+		{
+			Name:     "CreateWorkspaceAnyOrg",
+			Actions:  []policy.Action{policy.ActionCreate},
+			Resource: rbac.ResourceWorkspace.AnyOrganization().WithOwner(currentUser.String()),
+			AuthorizeMap: map[bool][]hasAuthSubjects{
+				true: {owner, orgAdmin, otherOrgAdmin, orgMemberMe},
+				false: {
+					memberMe, userAdmin, templateAdmin,
+					orgAuditor, orgUserAdmin, orgTemplateAdmin,
+					otherOrgMember, otherOrgAuditor, otherOrgUserAdmin, otherOrgTemplateAdmin,
+				},
+			},
+		},
 	}
 
 	// We expect every permission to be tested above.

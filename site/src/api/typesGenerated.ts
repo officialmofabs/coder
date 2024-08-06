@@ -89,7 +89,6 @@ export interface AuditLog {
   readonly id: string;
   readonly request_id: string;
   readonly time: string;
-  readonly organization_id: string;
   // Named type "net/netip.Addr" unknown, using "any"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- External type
   readonly ip: any;
@@ -105,6 +104,8 @@ export interface AuditLog {
   readonly description: string;
   readonly resource_link: string;
   readonly is_deleted: boolean;
+  readonly organization_id: string;
+  readonly organization?: MinimalOrganization;
   readonly user?: User;
 }
 
@@ -144,6 +145,7 @@ export interface AuthorizationObject {
   readonly owner_id?: string;
   readonly organization_id?: string;
   readonly resource_id?: string;
+  readonly any_org?: boolean;
 }
 
 // From codersdk/authorization.go
@@ -236,6 +238,7 @@ export interface CreateOrganizationRequest {
 // From codersdk/provisionerdaemons.go
 export interface CreateProvisionerKeyRequest {
   readonly name: string;
+  readonly tags: Record<string, string>;
 }
 
 // From codersdk/provisionerdaemons.go
@@ -569,6 +572,7 @@ export interface ExternalAuthLinkProvider {
 
 // From codersdk/externalauth.go
 export interface ExternalAuthUser {
+  readonly id: number;
   readonly login: string;
   readonly avatar_url: string;
   readonly profile_url: string;
@@ -690,11 +694,44 @@ export interface LoginWithPasswordResponse {
   readonly session_token: string;
 }
 
+// From codersdk/organizations.go
+export interface MinimalOrganization {
+  readonly id: string;
+  readonly name: string;
+  readonly display_name: string;
+  readonly icon: string;
+}
+
 // From codersdk/users.go
 export interface MinimalUser {
   readonly id: string;
   readonly username: string;
   readonly avatar_url: string;
+}
+
+// From codersdk/notifications.go
+export interface NotificationMethodsResponse {
+  readonly available: readonly string[];
+  readonly default: string;
+}
+
+// From codersdk/notifications.go
+export interface NotificationPreference {
+  readonly id: string;
+  readonly disabled: boolean;
+  readonly updated_at: string;
+}
+
+// From codersdk/notifications.go
+export interface NotificationTemplate {
+  readonly id: string;
+  readonly name: string;
+  readonly title_template: string;
+  readonly body_template: string;
+  readonly actions: string;
+  readonly group: string;
+  readonly method: string;
+  readonly kind: string;
 }
 
 // From codersdk/deployment.go
@@ -841,18 +878,15 @@ export interface OIDCConfig {
   readonly sign_in_text: string;
   readonly icon_url: string;
   readonly signups_disabled_text: string;
+  readonly skip_issuer_checks: boolean;
 }
 
 // From codersdk/organizations.go
-export interface Organization {
-  readonly id: string;
-  readonly name: string;
-  readonly display_name: string;
+export interface Organization extends MinimalOrganization {
   readonly description: string;
   readonly created_at: string;
   readonly updated_at: string;
   readonly is_default: boolean;
-  readonly icon: string;
 }
 
 // From codersdk/organizations.go
@@ -869,6 +903,7 @@ export interface OrganizationMemberWithUserData extends OrganizationMember {
   readonly username: string;
   readonly name: string;
   readonly avatar_url: string;
+  readonly email: string;
   readonly global_roles: readonly SlimRole[];
 }
 
@@ -887,6 +922,15 @@ export interface PatchGroupRequest {
   readonly display_name?: string;
   readonly avatar_url?: string;
   readonly quota_allowance?: number;
+}
+
+// From codersdk/roles.go
+export interface PatchRoleRequest {
+  readonly name: string;
+  readonly display_name: string;
+  readonly site_permissions: readonly Permission[];
+  readonly organization_permissions: readonly Permission[];
+  readonly user_permissions: readonly Permission[];
 }
 
 // From codersdk/templateversions.go
@@ -995,6 +1039,7 @@ export interface ProvisionerKey {
   readonly created_at: string;
   readonly organization: string;
   readonly name: string;
+  readonly tags: Record<string, string>;
 }
 
 // From codersdk/workspaceproxy.go
@@ -1246,7 +1291,8 @@ export interface TemplateExample {
 
 // From codersdk/organizations.go
 export interface TemplateFilter {
-  readonly q?: string;
+  readonly OrganizationID: string;
+  readonly ExactName: string;
 }
 
 // From codersdk/templates.go
@@ -1426,6 +1472,11 @@ export interface UpdateCheckResponse {
   readonly url: string;
 }
 
+// From codersdk/notifications.go
+export interface UpdateNotificationTemplateMethod {
+  readonly method?: string;
+}
+
 // From codersdk/organizations.go
 export interface UpdateOrganizationRequest {
   readonly name?: string;
@@ -1472,6 +1523,11 @@ export interface UpdateTemplateMeta {
 // From codersdk/users.go
 export interface UpdateUserAppearanceSettingsRequest {
   readonly theme_preference: string;
+}
+
+// From codersdk/notifications.go
+export interface UpdateUserNotificationPreferences {
+  readonly template_disabled_map: Record<string, boolean>;
 }
 
 // From codersdk/users.go
@@ -2099,6 +2155,10 @@ export const FeatureNames: FeatureName[] = [
   "workspace_proxy",
 ];
 
+// From codersdk/deployment.go
+export type FeatureSet = "" | "enterprise" | "premium";
+export const FeatureSets: FeatureSet[] = ["", "enterprise", "premium"];
+
 // From codersdk/groups.go
 export type GroupSource = "oidc" | "user";
 export const GroupSources: GroupSource[] = ["oidc", "user"];
@@ -2244,6 +2304,8 @@ export type RBACResource =
   | "file"
   | "group"
   | "license"
+  | "notification_preference"
+  | "notification_template"
   | "oauth2_app"
   | "oauth2_app_code_token"
   | "oauth2_app_secret"
@@ -2271,6 +2333,8 @@ export const RBACResources: RBACResource[] = [
   "file",
   "group",
   "license",
+  "notification_preference",
+  "notification_template",
   "oauth2_app",
   "oauth2_app_code_token",
   "oauth2_app_secret",

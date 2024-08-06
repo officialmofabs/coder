@@ -2,7 +2,7 @@ import { type FC, useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useQuery } from "react-query";
 import { useSearchParams } from "react-router-dom";
-import { templatesByOrganizationId } from "api/queries/templates";
+import { templates } from "api/queries/templates";
 import type { Workspace } from "api/typesGenerated";
 import { useFilter } from "components/Filter/filter";
 import { useUserFilterMenu } from "components/Filter/UserFilter";
@@ -39,15 +39,12 @@ const WorkspacesPage: FC = () => {
   const searchParamsResult = useSafeSearchParams();
   const pagination = usePagination({ searchParamsResult });
   const { permissions } = useAuthenticated();
-  const { entitlements, organizationId } = useDashboard();
+  const { entitlements } = useDashboard();
 
-  const templatesQuery = useQuery(
-    templatesByOrganizationId(organizationId, false),
-  );
+  const templatesQuery = useQuery(templates());
 
   const filterProps = useWorkspacesFilter({
     searchParamsResult,
-    organizationId,
     onFilterChange: () => pagination.goToPage(1),
   });
 
@@ -144,13 +141,11 @@ export default WorkspacesPage;
 type UseWorkspacesFilterOptions = {
   searchParamsResult: ReturnType<typeof useSearchParams>;
   onFilterChange: () => void;
-  organizationId: string;
 };
 
 const useWorkspacesFilter = ({
   searchParamsResult,
   onFilterChange,
-  organizationId,
 }: UseWorkspacesFilterOptions) => {
   const filter = useFilter({
     fallbackFilter: "owner:me",
@@ -168,7 +163,6 @@ const useWorkspacesFilter = ({
   });
 
   const templateMenu = useTemplateFilterMenu({
-    organizationId,
     value: filter.values.template,
     onChange: (option) =>
       filter.update({ ...filter.values, template: option?.value }),

@@ -16,7 +16,6 @@ import {
 import { InputGroup } from "components/InputGroup/InputGroup";
 import { SearchField } from "components/SearchField/SearchField";
 import { useDebouncedFunction } from "hooks/debounce";
-import { filterParamsKey } from "utils/filters";
 
 export type PresetFilter = {
   name: string;
@@ -36,19 +35,21 @@ type UseFilterConfig = {
   onUpdate?: (newValue: string) => void;
 };
 
+export const useFilterParamsKey = "filter";
+
 export const useFilter = ({
   fallbackFilter = "",
   searchParamsResult,
   onUpdate,
 }: UseFilterConfig) => {
   const [searchParams, setSearchParams] = searchParamsResult;
-  const query = searchParams.get(filterParamsKey) ?? fallbackFilter;
+  const query = searchParams.get(useFilterParamsKey) ?? fallbackFilter;
 
   const update = (newValues: string | FilterValues) => {
     const serialized =
       typeof newValues === "string" ? newValues : stringifyFilter(newValues);
 
-    searchParams.set(filterParamsKey, serialized);
+    searchParams.set(useFilterParamsKey, serialized);
     setSearchParams(searchParams);
 
     if (onUpdate !== undefined) {
@@ -141,6 +142,8 @@ type FilterProps = {
   error?: unknown;
   options?: ReactNode;
   presets: PresetFilter[];
+  /** Set to true if there is not much horizontal space. */
+  compact?: boolean;
 };
 
 export const Filter: FC<FilterProps> = ({
@@ -153,6 +156,7 @@ export const Filter: FC<FilterProps> = ({
   learnMoreLabel2,
   learnMoreLink2,
   presets,
+  compact,
 }) => {
   const theme = useTheme();
   // Storing local copy of the filter query so that it can be updated more
@@ -183,7 +187,10 @@ export const Filter: FC<FilterProps> = ({
         display: "flex",
         gap: 8,
         marginBottom: 16,
-        flexWrap: "nowrap",
+        // For now compact just means immediately wrapping, but maybe we should
+        // have a collapsible section or consolidate into one menu or something.
+        // TODO: Remove separate compact mode once multi-org is stable.
+        flexWrap: compact ? "wrap" : "nowrap",
 
         [theme.breakpoints.down("md")]: {
           flexWrap: "wrap",

@@ -558,6 +558,12 @@
   "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
   "ip": "string",
   "is_deleted": true,
+  "organization": {
+    "display_name": "string",
+    "icon": "string",
+    "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+    "name": "string"
+  },
   "organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
   "request_id": "266ea41d-adf5-480b-af50-15b940c2b846",
   "resource_icon": "string",
@@ -594,26 +600,27 @@
 
 ### Properties
 
-| Name                | Type                                           | Required | Restrictions | Description                                  |
-| ------------------- | ---------------------------------------------- | -------- | ------------ | -------------------------------------------- |
-| `action`            | [codersdk.AuditAction](#codersdkauditaction)   | false    |              |                                              |
-| `additional_fields` | array of integer                               | false    |              |                                              |
-| `description`       | string                                         | false    |              |                                              |
-| `diff`              | [codersdk.AuditDiff](#codersdkauditdiff)       | false    |              |                                              |
-| `id`                | string                                         | false    |              |                                              |
-| `ip`                | string                                         | false    |              |                                              |
-| `is_deleted`        | boolean                                        | false    |              |                                              |
-| `organization_id`   | string                                         | false    |              |                                              |
-| `request_id`        | string                                         | false    |              |                                              |
-| `resource_icon`     | string                                         | false    |              |                                              |
-| `resource_id`       | string                                         | false    |              |                                              |
-| `resource_link`     | string                                         | false    |              |                                              |
-| `resource_target`   | string                                         | false    |              | Resource target is the name of the resource. |
-| `resource_type`     | [codersdk.ResourceType](#codersdkresourcetype) | false    |              |                                              |
-| `status_code`       | integer                                        | false    |              |                                              |
-| `time`              | string                                         | false    |              |                                              |
-| `user`              | [codersdk.User](#codersdkuser)                 | false    |              |                                              |
-| `user_agent`        | string                                         | false    |              |                                              |
+| Name                | Type                                                         | Required | Restrictions | Description                                  |
+| ------------------- | ------------------------------------------------------------ | -------- | ------------ | -------------------------------------------- |
+| `action`            | [codersdk.AuditAction](#codersdkauditaction)                 | false    |              |                                              |
+| `additional_fields` | array of integer                                             | false    |              |                                              |
+| `description`       | string                                                       | false    |              |                                              |
+| `diff`              | [codersdk.AuditDiff](#codersdkauditdiff)                     | false    |              |                                              |
+| `id`                | string                                                       | false    |              |                                              |
+| `ip`                | string                                                       | false    |              |                                              |
+| `is_deleted`        | boolean                                                      | false    |              |                                              |
+| `organization`      | [codersdk.MinimalOrganization](#codersdkminimalorganization) | false    |              |                                              |
+| `organization_id`   | string                                                       | false    |              | Deprecated: Use 'organization.id' instead.   |
+| `request_id`        | string                                                       | false    |              |                                              |
+| `resource_icon`     | string                                                       | false    |              |                                              |
+| `resource_id`       | string                                                       | false    |              |                                              |
+| `resource_link`     | string                                                       | false    |              |                                              |
+| `resource_target`   | string                                                       | false    |              | Resource target is the name of the resource. |
+| `resource_type`     | [codersdk.ResourceType](#codersdkresourcetype)               | false    |              |                                              |
+| `status_code`       | integer                                                      | false    |              |                                              |
+| `time`              | string                                                       | false    |              |                                              |
+| `user`              | [codersdk.User](#codersdkuser)                               | false    |              |                                              |
+| `user_agent`        | string                                                       | false    |              |                                              |
 
 ## codersdk.AuditLogResponse
 
@@ -639,6 +646,12 @@
       "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
       "ip": "string",
       "is_deleted": true,
+      "organization": {
+        "display_name": "string",
+        "icon": "string",
+        "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+        "name": "string"
+      },
       "organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
       "request_id": "266ea41d-adf5-480b-af50-15b940c2b846",
       "resource_icon": "string",
@@ -731,6 +744,7 @@
 {
   "action": "create",
   "object": {
+    "any_org": true,
     "organization_id": "string",
     "owner_id": "string",
     "resource_id": "string",
@@ -761,6 +775,7 @@ AuthorizationCheck is used to check if the currently authenticated user (or the 
 
 ```json
 {
+  "any_org": true,
   "organization_id": "string",
   "owner_id": "string",
   "resource_id": "string",
@@ -774,6 +789,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 
 | Name              | Type                                           | Required | Restrictions | Description                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------- | ---------------------------------------------- | -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `any_org`         | boolean                                        | false    |              | Any org (optional) will disregard the org_owner when checking for permissions. This cannot be set to true if the OrganizationID is set.                                                                                                                                                                                                                              |
 | `organization_id` | string                                         | false    |              | Organization ID (optional) adds the set constraint to all resources owned by a given organization.                                                                                                                                                                                                                                                                   |
 | `owner_id`        | string                                         | false    |              | Owner ID (optional) adds the set constraint to all resources owned by a given user.                                                                                                                                                                                                                                                                                  |
 | `resource_id`     | string                                         | false    |              | Resource ID (optional) reduces the set to a singular resource. This assigns a resource ID to the resource type, eg: a single workspace. The rbac library will not fetch the resource from the database, so if you are using this option, you should also set the owner ID and organization ID if possible. Be as specific as possible using all the fields relevant. |
@@ -787,6 +803,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
     "property1": {
       "action": "create",
       "object": {
+        "any_org": true,
         "organization_id": "string",
         "owner_id": "string",
         "resource_id": "string",
@@ -796,6 +813,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
     "property2": {
       "action": "create",
       "object": {
+        "any_org": true,
         "organization_id": "string",
         "owner_id": "string",
         "resource_id": "string",
@@ -1791,6 +1809,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
       "scopes": ["string"],
       "sign_in_text": "string",
       "signups_disabled_text": "string",
+      "skip_issuer_checks": true,
       "user_role_field": "string",
       "user_role_mapping": {},
       "user_roles_default": ["string"],
@@ -2213,6 +2232,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
     "scopes": ["string"],
     "sign_in_text": "string",
     "signups_disabled_text": "string",
+    "skip_issuer_checks": true,
     "user_role_field": "string",
     "user_role_mapping": {},
     "user_roles_default": ["string"],
@@ -2501,6 +2521,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
     {
       "account": {
         "avatar_url": "string",
+        "id": 0,
         "login": "string",
         "name": "string",
         "profile_url": "string"
@@ -2511,6 +2532,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   ],
   "user": {
     "avatar_url": "string",
+    "id": 0,
     "login": "string",
     "name": "string",
     "profile_url": "string"
@@ -2536,6 +2558,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 {
   "account": {
     "avatar_url": "string",
+    "id": 0,
     "login": "string",
     "name": "string",
     "profile_url": "string"
@@ -2649,6 +2672,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 ```json
 {
   "avatar_url": "string",
+  "id": 0,
   "login": "string",
   "name": "string",
   "profile_url": "string"
@@ -2657,12 +2681,13 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 
 ### Properties
 
-| Name          | Type   | Required | Restrictions | Description |
-| ------------- | ------ | -------- | ------------ | ----------- |
-| `avatar_url`  | string | false    |              |             |
-| `login`       | string | false    |              |             |
-| `name`        | string | false    |              |             |
-| `profile_url` | string | false    |              |             |
+| Name          | Type    | Required | Restrictions | Description |
+| ------------- | ------- | -------- | ------------ | ----------- |
+| `avatar_url`  | string  | false    |              |             |
+| `id`          | integer | false    |              |             |
+| `login`       | string  | false    |              |             |
+| `name`        | string  | false    |              |             |
+| `profile_url` | string  | false    |              |             |
 
 ## codersdk.Feature
 
@@ -3078,6 +3103,26 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | --------------- | ------ | -------- | ------------ | ----------- |
 | `session_token` | string | true     |              |             |
 
+## codersdk.MinimalOrganization
+
+```json
+{
+  "display_name": "string",
+  "icon": "string",
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "name": "string"
+}
+```
+
+### Properties
+
+| Name           | Type   | Required | Restrictions | Description |
+| -------------- | ------ | -------- | ------------ | ----------- |
+| `display_name` | string | false    |              |             |
+| `icon`         | string | false    |              |             |
+| `id`           | string | true     |              |             |
+| `name`         | string | false    |              |             |
+
 ## codersdk.MinimalUser
 
 ```json
@@ -3095,6 +3140,68 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `avatar_url` | string | false    |              |             |
 | `id`         | string | true     |              |             |
 | `username`   | string | true     |              |             |
+
+## codersdk.NotificationMethodsResponse
+
+```json
+{
+  "available": ["string"],
+  "default": "string"
+}
+```
+
+### Properties
+
+| Name        | Type            | Required | Restrictions | Description |
+| ----------- | --------------- | -------- | ------------ | ----------- |
+| `available` | array of string | false    |              |             |
+| `default`   | string          | false    |              |             |
+
+## codersdk.NotificationPreference
+
+```json
+{
+  "disabled": true,
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "updated_at": "2019-08-24T14:15:22Z"
+}
+```
+
+### Properties
+
+| Name         | Type    | Required | Restrictions | Description |
+| ------------ | ------- | -------- | ------------ | ----------- |
+| `disabled`   | boolean | false    |              |             |
+| `id`         | string  | false    |              |             |
+| `updated_at` | string  | false    |              |             |
+
+## codersdk.NotificationTemplate
+
+```json
+{
+  "actions": "string",
+  "body_template": "string",
+  "group": "string",
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "kind": "string",
+  "method": "string",
+  "name": "string",
+  "title_template": "string"
+}
+```
+
+### Properties
+
+| Name             | Type   | Required | Restrictions | Description |
+| ---------------- | ------ | -------- | ------------ | ----------- |
+| `actions`        | string | false    |              |             |
+| `body_template`  | string | false    |              |             |
+| `group`          | string | false    |              |             |
+| `id`             | string | false    |              |             |
+| `kind`           | string | false    |              |             |
+| `method`         | string | false    |              |             |
+| `name`           | string | false    |              |             |
+| `title_template` | string | false    |              |             |
 
 ## codersdk.NotificationsConfig
 
@@ -3490,6 +3597,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   "scopes": ["string"],
   "sign_in_text": "string",
   "signups_disabled_text": "string",
+  "skip_issuer_checks": true,
   "user_role_field": "string",
   "user_role_mapping": {},
   "user_roles_default": ["string"],
@@ -3522,6 +3630,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `scopes`                | array of string                  | false    |              |                                                                                  |
 | `sign_in_text`          | string                           | false    |              |                                                                                  |
 | `signups_disabled_text` | string                           | false    |              |                                                                                  |
+| `skip_issuer_checks`    | boolean                          | false    |              |                                                                                  |
 | `user_role_field`       | string                           | false    |              |                                                                                  |
 | `user_role_mapping`     | object                           | false    |              |                                                                                  |
 | `user_roles_default`    | array of string                  | false    |              |                                                                                  |
@@ -3589,6 +3698,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 {
   "avatar_url": "string",
   "created_at": "2019-08-24T14:15:22Z",
+  "email": "string",
   "global_roles": [
     {
       "display_name": "string",
@@ -3617,6 +3727,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | ----------------- | ----------------------------------------------- | -------- | ------------ | ----------- |
 | `avatar_url`      | string                                          | false    |              |             |
 | `created_at`      | string                                          | false    |              |             |
+| `email`           | string                                          | false    |              |             |
 | `global_roles`    | array of [codersdk.SlimRole](#codersdkslimrole) | false    |              |             |
 | `name`            | string                                          | false    |              |             |
 | `organization_id` | string                                          | false    |              |             |
@@ -3648,6 +3759,46 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `name`            | string          | false    |              |             |
 | `quota_allowance` | integer         | false    |              |             |
 | `remove_users`    | array of string | false    |              |             |
+
+## codersdk.PatchRoleRequest
+
+```json
+{
+  "display_name": "string",
+  "name": "string",
+  "organization_permissions": [
+    {
+      "action": "application_connect",
+      "negate": true,
+      "resource_type": "*"
+    }
+  ],
+  "site_permissions": [
+    {
+      "action": "application_connect",
+      "negate": true,
+      "resource_type": "*"
+    }
+  ],
+  "user_permissions": [
+    {
+      "action": "application_connect",
+      "negate": true,
+      "resource_type": "*"
+    }
+  ]
+}
+```
+
+### Properties
+
+| Name                       | Type                                                | Required | Restrictions | Description                                                                    |
+| -------------------------- | --------------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------------ |
+| `display_name`             | string                                              | false    |              |                                                                                |
+| `name`                     | string                                              | false    |              |                                                                                |
+| `organization_permissions` | array of [codersdk.Permission](#codersdkpermission) | false    |              | Organization permissions are specific to the organization the role belongs to. |
+| `site_permissions`         | array of [codersdk.Permission](#codersdkpermission) | false    |              |                                                                                |
+| `user_permissions`         | array of [codersdk.Permission](#codersdkpermission) | false    |              |                                                                                |
 
 ## codersdk.PatchTemplateVersionRequest
 
@@ -3956,18 +4107,24 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   "created_at": "2019-08-24T14:15:22Z",
   "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
   "name": "string",
-  "organization": "452c1a86-a0af-475b-b03f-724878b0f387"
+  "organization": "452c1a86-a0af-475b-b03f-724878b0f387",
+  "tags": {
+    "property1": "string",
+    "property2": "string"
+  }
 }
 ```
 
 ### Properties
 
-| Name           | Type   | Required | Restrictions | Description |
-| -------------- | ------ | -------- | ------------ | ----------- |
-| `created_at`   | string | false    |              |             |
-| `id`           | string | false    |              |             |
-| `name`         | string | false    |              |             |
-| `organization` | string | false    |              |             |
+| Name               | Type   | Required | Restrictions | Description |
+| ------------------ | ------ | -------- | ------------ | ----------- |
+| `created_at`       | string | false    |              |             |
+| `id`               | string | false    |              |             |
+| `name`             | string | false    |              |             |
+| `organization`     | string | false    |              |             |
+| `tags`             | object | false    |              |             |
+| » `[any property]` | string | false    |              |             |
 
 ## codersdk.ProvisionerLogLevel
 
@@ -4098,34 +4255,36 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 
 #### Enumerated Values
 
-| Value                   |
-| ----------------------- |
-| `*`                     |
-| `api_key`               |
-| `assign_org_role`       |
-| `assign_role`           |
-| `audit_log`             |
-| `debug_info`            |
-| `deployment_config`     |
-| `deployment_stats`      |
-| `file`                  |
-| `group`                 |
-| `license`               |
-| `oauth2_app`            |
-| `oauth2_app_code_token` |
-| `oauth2_app_secret`     |
-| `organization`          |
-| `organization_member`   |
-| `provisioner_daemon`    |
-| `provisioner_keys`      |
-| `replicas`              |
-| `system`                |
-| `tailnet_coordinator`   |
-| `template`              |
-| `user`                  |
-| `workspace`             |
-| `workspace_dormant`     |
-| `workspace_proxy`       |
+| Value                     |
+| ------------------------- |
+| `*`                       |
+| `api_key`                 |
+| `assign_org_role`         |
+| `assign_role`             |
+| `audit_log`               |
+| `debug_info`              |
+| `deployment_config`       |
+| `deployment_stats`        |
+| `file`                    |
+| `group`                   |
+| `license`                 |
+| `notification_preference` |
+| `notification_template`   |
+| `oauth2_app`              |
+| `oauth2_app_code_token`   |
+| `oauth2_app_secret`       |
+| `organization`            |
+| `organization_member`     |
+| `provisioner_daemon`      |
+| `provisioner_keys`        |
+| `replicas`                |
+| `system`                  |
+| `tailnet_coordinator`     |
+| `template`                |
+| `user`                    |
+| `workspace`               |
+| `workspace_dormant`       |
+| `workspace_proxy`         |
 
 ## codersdk.RateLimitConfig
 
@@ -5479,6 +5638,24 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | Name               | Type   | Required | Restrictions | Description |
 | ------------------ | ------ | -------- | ------------ | ----------- |
 | `theme_preference` | string | true     |              |             |
+
+## codersdk.UpdateUserNotificationPreferences
+
+```json
+{
+  "template_disabled_map": {
+    "property1": true,
+    "property2": true
+  }
+}
+```
+
+### Properties
+
+| Name                    | Type    | Required | Restrictions | Description |
+| ----------------------- | ------- | -------- | ------------ | ----------- |
+| `template_disabled_map` | object  | false    |              |             |
+| » `[any property]`      | boolean | false    |              |             |
 
 ## codersdk.UpdateUserPasswordRequest
 

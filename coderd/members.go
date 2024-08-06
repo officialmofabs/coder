@@ -106,6 +106,19 @@ func (api *API) deleteOrganizationMember(rw http.ResponseWriter, r *http.Request
 	aReq.Old = member.OrganizationMember.Auditable(member.Username)
 	defer commitAudit()
 
+	if organization.IsDefault {
+		// Multi-organizations is currently an experiment, which means it is feasible
+		// for a deployment to enable, then disable this. To maintain backwards
+		// compatibility, this safety is necessary.
+		// TODO: Remove this check when multi-organizations is fully supported.
+		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{
+			Message:     "Removing members from the default organization is not supported.",
+			Detail:      "Multi-organizations is currently an experiment, and until it is fully supported, the default org should be protected.",
+			Validations: nil,
+		})
+		return
+	}
+
 	if member.UserID == apiKey.UserID {
 		httpapi.Write(ctx, rw, http.StatusBadRequest, codersdk.Response{Message: "cannot remove self from an organization"})
 		return
@@ -319,6 +332,7 @@ func convertOrganizationMembersWithUserData(ctx context.Context, db database.Sto
 			Username:           rows[i].Username,
 			AvatarURL:          rows[i].AvatarURL,
 			Name:               rows[i].Name,
+			Email:              rows[i].Email,
 			GlobalRoles:        db2sdk.SlimRolesFromNames(rows[i].GlobalRoles),
 			OrganizationMember: convertedMembers[i],
 		})

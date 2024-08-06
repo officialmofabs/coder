@@ -537,6 +537,33 @@ curl -X DELETE http://coder-server:8080/api/v2/licenses/{id} \
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
 
+## Update notification template dispatch method
+
+### Code samples
+
+```shell
+# Example request using curl
+curl -X PUT http://coder-server:8080/api/v2/notifications/templates/{notification_template}/method \
+  -H 'Coder-Session-Token: API_KEY'
+```
+
+`PUT /notifications/templates/{notification_template}/method`
+
+### Parameters
+
+| Name                    | In   | Type   | Required | Description                |
+| ----------------------- | ---- | ------ | -------- | -------------------------- |
+| `notification_template` | path | string | true     | Notification template UUID |
+
+### Responses
+
+| Status | Meaning                                                         | Description  | Schema |
+| ------ | --------------------------------------------------------------- | ------------ | ------ |
+| 200    | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)         | Success      |        |
+| 304    | [Not Modified](https://tools.ietf.org/html/rfc7232#section-4.1) | Not modified |        |
+
+To perform this operation, you must be authenticated. [Learn more](authentication.md).
+
 ## Get OAuth2 applications.
 
 ### Code samples
@@ -1389,7 +1416,11 @@ curl -X GET http://coder-server:8080/api/v2/organizations/{organization}/provisi
     "created_at": "2019-08-24T14:15:22Z",
     "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
     "name": "string",
-    "organization": "452c1a86-a0af-475b-b03f-724878b0f387"
+    "organization": "452c1a86-a0af-475b-b03f-724878b0f387",
+    "tags": {
+      "property1": "string",
+      "property2": "string"
+    }
   }
 ]
 ```
@@ -1404,13 +1435,15 @@ curl -X GET http://coder-server:8080/api/v2/organizations/{organization}/provisi
 
 Status Code **200**
 
-| Name             | Type              | Required | Restrictions | Description |
-| ---------------- | ----------------- | -------- | ------------ | ----------- |
-| `[array item]`   | array             | false    |              |             |
-| `» created_at`   | string(date-time) | false    |              |             |
-| `» id`           | string(uuid)      | false    |              |             |
-| `» name`         | string            | false    |              |             |
-| `» organization` | string(uuid)      | false    |              |             |
+| Name                | Type              | Required | Restrictions | Description |
+| ------------------- | ----------------- | -------- | ------------ | ----------- |
+| `[array item]`      | array             | false    |              |             |
+| `» created_at`      | string(date-time) | false    |              |             |
+| `» id`              | string(uuid)      | false    |              |             |
+| `» name`            | string            | false    |              |             |
+| `» organization`    | string(uuid)      | false    |              |             |
+| `» tags`            | object            | false    |              |             |
+| `»» [any property]` | string            | false    |              |             |
 
 To perform this operation, you must be authenticated. [Learn more](authentication.md).
 

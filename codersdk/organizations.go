@@ -39,16 +39,20 @@ func ProvisionerTypeValid[T ProvisionerType | string](pt T) error {
 	}
 }
 
-// Organization is the JSON representation of a Coder organization.
-type Organization struct {
+type MinimalOrganization struct {
 	ID          uuid.UUID `table:"id" json:"id" validate:"required" format:"uuid"`
 	Name        string    `table:"name,default_sort" json:"name"`
 	DisplayName string    `table:"display_name" json:"display_name"`
-	Description string    `table:"description" json:"description"`
-	CreatedAt   time.Time `table:"created_at" json:"created_at" validate:"required" format:"date-time"`
-	UpdatedAt   time.Time `table:"updated_at" json:"updated_at" validate:"required" format:"date-time"`
-	IsDefault   bool      `table:"default" json:"is_default" validate:"required"`
 	Icon        string    `table:"icon" json:"icon"`
+}
+
+// Organization is the JSON representation of a Coder organization.
+type Organization struct {
+	MinimalOrganization `table:"m,recursive_inline"`
+	Description         string    `table:"description" json:"description"`
+	CreatedAt           time.Time `table:"created_at" json:"created_at" validate:"required" format:"date-time"`
+	UpdatedAt           time.Time `table:"updated_at" json:"updated_at" validate:"required" format:"date-time"`
+	IsDefault           bool      `table:"default" json:"is_default" validate:"required"`
 }
 
 func (o Organization) HumanName() string {
@@ -70,6 +74,7 @@ type OrganizationMemberWithUserData struct {
 	Username           string     `table:"username,default_sort" json:"username"`
 	Name               string     `table:"name" json:"name"`
 	AvatarURL          string     `json:"avatar_url"`
+	Email              string     `json:"email"`
 	GlobalRoles        []SlimRole `json:"global_roles"`
 	OrganizationMember `table:"m,recursive_inline"`
 }
@@ -400,9 +405,8 @@ func (c *Client) TemplatesByOrganization(ctx context.Context, organizationID uui
 }
 
 type TemplateFilter struct {
-	OrganizationID uuid.UUID `json:"organization_id,omitempty" format:"uuid" typescript:"-"`
-	FilterQuery    string    `json:"q,omitempty"`
-	ExactName      string    `json:"exact_name,omitempty" typescript:"-"`
+	OrganizationID uuid.UUID
+	ExactName      string
 }
 
 // asRequestOption returns a function that can be used in (*Client).Request.
@@ -418,11 +422,6 @@ func (f TemplateFilter) asRequestOption() RequestOption {
 
 		if f.ExactName != "" {
 			params = append(params, fmt.Sprintf("exact_name:%q", f.ExactName))
-		}
-
-		if f.FilterQuery != "" {
-			// If custom stuff is added, just add it on here.
-			params = append(params, f.FilterQuery)
 		}
 
 		q := r.URL.Query()
@@ -474,8 +473,15 @@ func (c *Client) TemplateByName(ctx context.Context, organizationID uuid.UUID, n
 }
 
 // CreateWorkspace creates a new workspace for the template specified.
-func (c *Client) CreateWorkspace(ctx context.Context, organizationID uuid.UUID, user string, request CreateWorkspaceRequest) (Workspace, error) {
-	res, err := c.Request(ctx, http.MethodPost, fmt.Sprintf("/api/v2/organizations/%s/members/%s/workspaces", organizationID, user), request)
+//
+// Deprecated: Use CreateUserWorkspace instead.
+func (c *Client) CreateWorkspace(ctx context.Context, _ uuid.UUID, user string, request CreateWorkspaceRequest) (Workspace, error) {
+	return c.CreateUserWorkspace(ctx, user, request)
+}
+
+// CreateUserWorkspace creates a new workspace for the template specified.
+func (c *Client) CreateUserWorkspace(ctx context.Context, user string, request CreateWorkspaceRequest) (Workspace, error) {
+	res, err := c.Request(ctx, http.MethodPost, fmt.Sprintf("/api/v2/users/%s/workspaces", user), request)
 	if err != nil {
 		return Workspace{}, err
 	}

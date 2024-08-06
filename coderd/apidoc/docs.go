@@ -988,7 +988,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "File to be uploaded",
+                        "description": "File to be uploaded. If using tar format, file must conform to ustar (pax may cause problems).",
                         "name": "file",
                         "in": "formData",
                         "required": true
@@ -1547,6 +1547,34 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications/dispatch-methods": {
+            "get": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Get notification dispatch methods",
+                "operationId": "get-notification-dispatch-methods",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/codersdk.NotificationMethodsResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/notifications/settings": {
             "get": {
                 "security": [
@@ -1558,7 +1586,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "General"
+                    "Notifications"
                 ],
                 "summary": "Get notifications settings",
                 "operationId": "get-notifications-settings",
@@ -1584,7 +1612,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "General"
+                    "Notifications"
                 ],
                 "summary": "Update notifications settings",
                 "operationId": "update-notifications-settings",
@@ -1608,6 +1636,68 @@ const docTemplate = `{
                     },
                     "304": {
                         "description": "Not Modified"
+                    }
+                }
+            }
+        },
+        "/notifications/templates/system": {
+            "get": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Get system notification templates",
+                "operationId": "get-system-notification-templates",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/codersdk.NotificationTemplate"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/templates/{notification_template}/method": {
+            "put": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Enterprise"
+                ],
+                "summary": "Update notification template dispatch method",
+                "operationId": "update-notification-template-dispatch-method",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Notification template UUID",
+                        "name": "notification_template",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    },
+                    "304": {
+                        "description": "Not modified"
                     }
                 }
             }
@@ -2416,6 +2506,9 @@ const docTemplate = `{
                         "CoderSessionToken": []
                     }
                 ],
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2432,6 +2525,15 @@ const docTemplate = `{
                         "name": "organization",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Upsert role request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/codersdk.PatchRoleRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -2593,6 +2695,7 @@ const docTemplate = `{
                 ],
                 "summary": "Create user workspace by organization",
                 "operationId": "create-user-workspace-by-organization",
+                "deprecated": true,
                 "parameters": [
                     {
                         "type": "string",
@@ -4844,8 +4947,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK"
                     }
                 }
             }
@@ -5353,6 +5456,90 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{user}/notifications/preferences": {
+            "get": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Get user notification preferences",
+                "operationId": "get-user-notification-preferences",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID, name, or me",
+                        "name": "user",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/codersdk.NotificationPreference"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Update user notification preferences",
+                "operationId": "update-user-notification-preferences",
+                "parameters": [
+                    {
+                        "description": "Preferences",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/codersdk.UpdateUserNotificationPreferences"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID, name, or me",
+                        "name": "user",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/codersdk.NotificationPreference"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{user}/organizations": {
             "get": {
                 "security": [
@@ -5840,6 +6027,53 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/codersdk.WorkspaceBuild"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{user}/workspaces": {
+            "post": {
+                "security": [
+                    {
+                        "CoderSessionToken": []
+                    }
+                ],
+                "description": "Create a new workspace using a template. The request must\nspecify either the Template ID or the Template Version ID,\nnot both. If the Template ID is specified, the active version\nof the template will be used.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspaces"
+                ],
+                "summary": "Create user workspace",
+                "operationId": "create-user-workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Username, UUID, or me",
+                        "name": "user",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Create workspace request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/codersdk.CreateWorkspaceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/codersdk.Workspace"
                         }
                     }
                 }
@@ -8368,7 +8602,11 @@ const docTemplate = `{
                 "is_deleted": {
                     "type": "boolean"
                 },
+                "organization": {
+                    "$ref": "#/definitions/codersdk.MinimalOrganization"
+                },
                 "organization_id": {
+                    "description": "Deprecated: Use 'organization.id' instead.",
                     "type": "string",
                     "format": "uuid"
                 },
@@ -8478,6 +8716,10 @@ const docTemplate = `{
             "description": "AuthorizationObject can represent a \"set\" of objects, such as: all workspaces in an organization, all workspaces owned by me, all workspaces across the entire product.",
             "type": "object",
             "properties": {
+                "any_org": {
+                    "description": "AnyOrgOwner (optional) will disregard the org_owner when checking for permissions.\nThis cannot be set to true if the OrganizationID is set.",
+                    "type": "boolean"
+                },
                 "organization_id": {
                     "description": "OrganizationID (optional) adds the set constraint to all resources owned by a given organization.",
                     "type": "string"
@@ -9755,6 +9997,9 @@ const docTemplate = `{
                 "avatar_url": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "integer"
+                },
                 "login": {
                     "type": "string"
                 },
@@ -10102,6 +10347,27 @@ const docTemplate = `{
                 }
             }
         },
+        "codersdk.MinimalOrganization": {
+            "type": "object",
+            "required": [
+                "id"
+            ],
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "codersdk.MinimalUser": {
             "type": "object",
             "required": [
@@ -10118,6 +10384,66 @@ const docTemplate = `{
                     "format": "uuid"
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "codersdk.NotificationMethodsResponse": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "default": {
+                    "type": "string"
+                }
+            }
+        },
+        "codersdk.NotificationPreference": {
+            "type": "object",
+            "properties": {
+                "disabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "codersdk.NotificationTemplate": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "string"
+                },
+                "body_template": {
+                    "type": "string"
+                },
+                "group": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "title_template": {
                     "type": "string"
                 }
             }
@@ -10508,6 +10834,9 @@ const docTemplate = `{
                 "signups_disabled_text": {
                     "type": "string"
                 },
+                "skip_issuer_checks": {
+                    "type": "boolean"
+                },
                 "user_role_field": {
                     "type": "string"
                 },
@@ -10600,6 +10929,9 @@ const docTemplate = `{
                     "type": "string",
                     "format": "date-time"
                 },
+                "email": {
+                    "type": "string"
+                },
                 "global_roles": {
                     "type": "array",
                     "items": {
@@ -10657,6 +10989,36 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "codersdk.PatchRoleRequest": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "organization_permissions": {
+                    "description": "OrganizationPermissions are specific to the organization the role belongs to.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.Permission"
+                    }
+                },
+                "site_permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.Permission"
+                    }
+                },
+                "user_permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/codersdk.Permission"
                     }
                 }
             }
@@ -10993,6 +11355,12 @@ const docTemplate = `{
                 "organization": {
                     "type": "string",
                     "format": "uuid"
+                },
+                "tags": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -11125,6 +11493,8 @@ const docTemplate = `{
                 "file",
                 "group",
                 "license",
+                "notification_preference",
+                "notification_template",
                 "oauth2_app",
                 "oauth2_app_code_token",
                 "oauth2_app_secret",
@@ -11153,6 +11523,8 @@ const docTemplate = `{
                 "ResourceFile",
                 "ResourceGroup",
                 "ResourceLicense",
+                "ResourceNotificationPreference",
+                "ResourceNotificationTemplate",
                 "ResourceOauth2App",
                 "ResourceOauth2AppCodeToken",
                 "ResourceOauth2AppSecret",
@@ -12418,6 +12790,17 @@ const docTemplate = `{
             "properties": {
                 "theme_preference": {
                     "type": "string"
+                }
+            }
+        },
+        "codersdk.UpdateUserNotificationPreferences": {
+            "type": "object",
+            "properties": {
+                "template_disabled_map": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "boolean"
+                    }
                 }
             }
         },

@@ -53,7 +53,7 @@ var auditableResourcesTypes = map[any]map[string]Action{
 	&database.AuditableOrganizationMember{}: {
 		"username":        ActionTrack,
 		"user_id":         ActionTrack,
-		"organization_id": ActionTrack,
+		"organization_id": ActionIgnore, // Never changes.
 		"created_at":      ActionTrack,
 		"updated_at":      ActionTrack,
 		"roles":           ActionTrack,
@@ -64,7 +64,7 @@ var auditableResourcesTypes = map[any]map[string]Action{
 		"site_permissions": ActionTrack,
 		"org_permissions":  ActionTrack,
 		"user_permissions": ActionTrack,
-		"organization_id":  ActionTrack,
+		"organization_id":  ActionIgnore, // Never changes.
 
 		"id":         ActionIgnore,
 		"created_at": ActionIgnore,
@@ -144,6 +144,7 @@ var auditableResourcesTypes = map[any]map[string]Action{
 		"quiet_hours_schedule": ActionTrack,
 		"theme_preference":     ActionIgnore,
 		"name":                 ActionTrack,
+		"github_com_user_id":   ActionIgnore,
 	},
 	&database.Workspace{}: {
 		"id":                 ActionTrack,
@@ -270,6 +271,16 @@ var auditableResourcesTypes = map[any]map[string]Action{
 		"is_default":   ActionTrack,
 		"display_name": ActionTrack,
 		"icon":         ActionTrack,
+	},
+	&database.NotificationTemplate{}: {
+		"id":             ActionIgnore,
+		"name":           ActionTrack,
+		"title_template": ActionTrack,
+		"body_template":  ActionTrack,
+		"actions":        ActionTrack,
+		"group":          ActionTrack,
+		"method":         ActionTrack,
+		"kind":           ActionTrack,
 	},
 }
 
