@@ -94,7 +94,7 @@ func TestEnterpriseListOrganizationMembers(t *testing.T) {
 
 		ctx := testutil.Context(t, testutil.WaitMedium)
 		//nolint:gocritic // only owners can patch roles
-		customRole, err := ownerClient.PatchOrganizationRole(ctx, codersdk.Role{
+		customRole, err := ownerClient.CreateOrganizationRole(ctx, codersdk.Role{
 			Name:            "custom",
 			OrganizationID:  owner.OrganizationID.String(),
 			DisplayName:     "Custom Role",
@@ -111,7 +111,7 @@ func TestEnterpriseListOrganizationMembers(t *testing.T) {
 			OrganizationID: owner.OrganizationID,
 		}, rbac.ScopedRoleOrgAdmin(owner.OrganizationID))
 
-		inv, root := clitest.New(t, "organization", "members", "list", "-c", "user_id,username,organization_roles")
+		inv, root := clitest.New(t, "organization", "members", "list", "-c", "user id,username,organization roles")
 		clitest.SetupConfig(t, client, root)
 
 		buf := new(bytes.Buffer)
@@ -147,7 +147,7 @@ func TestAssignOrganizationMemberRole(t *testing.T) {
 
 		ctx := testutil.Context(t, testutil.WaitMedium)
 		// nolint:gocritic // requires owner role to create
-		customRole, err := ownerClient.PatchOrganizationRole(ctx, codersdk.Role{
+		customRole, err := ownerClient.CreateOrganizationRole(ctx, codersdk.Role{
 			Name:            "custom-role",
 			OrganizationID:  owner.OrganizationID.String(),
 			DisplayName:     "Custom Role",
