@@ -732,7 +732,6 @@ func TestTemplates(t *testing.T) {
 		t.Parallel()
 
 		dv := coderdtest.DeploymentValues(t)
-		dv.Experiments = []string{string(codersdk.ExperimentCustomRoles), string(codersdk.ExperimentMultiOrganization)}
 		ownerClient, _ := coderdenttest.New(t, &coderdenttest.Options{
 			Options: &coderdtest.Options{
 				DeploymentValues:         dv,
@@ -782,7 +781,6 @@ func TestTemplates(t *testing.T) {
 	t.Run("MultipleOrganizations", func(t *testing.T) {
 		t.Parallel()
 		dv := coderdtest.DeploymentValues(t)
-		dv.Experiments = []string{string(codersdk.ExperimentMultiOrganization)}
 		ownerClient, owner := coderdenttest.New(t, &coderdenttest.Options{
 			Options: &coderdtest.Options{
 				DeploymentValues: dv,
@@ -1023,6 +1021,46 @@ func TestTemplateACL(t *testing.T) {
 		acl, err = anotherClient.TemplateACL(ctx, template.ID)
 		require.NoError(t, err)
 		require.Len(t, acl.Users, 0, "deleted users should be filtered")
+	})
+
+	// Test that we do not filter dormant users.
+	t.Run("IncludeDormantUsers", func(t *testing.T) {
+		t.Parallel()
+
+		client, user := coderdenttest.New(t, &coderdenttest.Options{LicenseOptions: &coderdenttest.LicenseOptions{
+			Features: license.Features{
+				codersdk.FeatureTemplateRBAC: 1,
+			},
+		}})
+		anotherClient, _ := coderdtest.CreateAnotherUser(t, client, user.OrganizationID, rbac.RoleTemplateAdmin(), rbac.RoleUserAdmin())
+
+		ctx := testutil.Context(t, testutil.WaitLong)
+
+		// nolint:gocritic // Must use owner to create user.
+		user1, err := client.CreateUserWithOrgs(ctx, codersdk.CreateUserRequestWithOrgs{
+			Email:           "coder@coder.com",
+			Username:        "coder",
+			Password:        "SomeStrongPassword!",
+			OrganizationIDs: []uuid.UUID{user.OrganizationID},
+		})
+		require.NoError(t, err)
+		require.Equal(t, codersdk.UserStatusDormant, user1.Status)
+		version := coderdtest.CreateTemplateVersion(t, client, user.OrganizationID, nil)
+		template := coderdtest.CreateTemplate(t, client, user.OrganizationID, version.ID)
+
+		err = anotherClient.UpdateTemplateACL(ctx, template.ID, codersdk.UpdateTemplateACL{
+			UserPerms: map[string]codersdk.TemplateRole{
+				user1.ID.String(): codersdk.TemplateRoleUse,
+			},
+		})
+		require.NoError(t, err)
+
+		acl, err := anotherClient.TemplateACL(ctx, template.ID)
+		require.NoError(t, err)
+		require.Contains(t, acl.Users, codersdk.TemplateUser{
+			User: user1,
+			Role: codersdk.TemplateRoleUse,
+		})
 	})
 
 	// Test that we do not return suspended users.
@@ -1695,7 +1733,6 @@ func TestTemplateAccess(t *testing.T) {
 	t.Cleanup(cancel)
 
 	dv := coderdtest.DeploymentValues(t)
-	dv.Experiments = []string{string(codersdk.ExperimentMultiOrganization)}
 	ownerClient, owner := coderdenttest.New(t, &coderdenttest.Options{
 		Options: &coderdtest.Options{
 			DeploymentValues: dv,
@@ -1906,7 +1943,6 @@ func TestMultipleOrganizationTemplates(t *testing.T) {
 	t.Parallel()
 
 	dv := coderdtest.DeploymentValues(t)
-	dv.Experiments = []string{string(codersdk.ExperimentMultiOrganization)}
 	ownerClient, first := coderdenttest.New(t, &coderdenttest.Options{
 		Options: &coderdtest.Options{
 			// This only affects the first org.

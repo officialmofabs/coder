@@ -513,21 +513,42 @@ func TestWorkspaceAgentClientCoordinate_BadVersion(t *testing.T) {
 	require.Equal(t, "version", sdkErr.Validations[0].Field)
 }
 
-type resumeTokenTestFakeCoordinator struct {
-	tailnet.Coordinator
-	lastPeerID uuid.UUID
+type resumeTokenRecordingProvider struct {
+	tailnet.ResumeTokenProvider
+	t             testing.TB
+	generateCalls chan uuid.UUID
+	verifyCalls   chan string
 }
 
-var _ tailnet.Coordinator = &resumeTokenTestFakeCoordinator{}
+var _ tailnet.ResumeTokenProvider = &resumeTokenRecordingProvider{}
 
-func (c *resumeTokenTestFakeCoordinator) ServeClient(conn net.Conn, id uuid.UUID, agentID uuid.UUID) error {
-	c.lastPeerID = id
-	return c.Coordinator.ServeClient(conn, id, agentID)
+func newResumeTokenRecordingProvider(t testing.TB, underlying tailnet.ResumeTokenProvider) *resumeTokenRecordingProvider {
+	return &resumeTokenRecordingProvider{
+		ResumeTokenProvider: underlying,
+		t:                   t,
+		generateCalls:       make(chan uuid.UUID, 1),
+		verifyCalls:         make(chan string, 1),
+	}
 }
 
-func (c *resumeTokenTestFakeCoordinator) Coordinate(ctx context.Context, id uuid.UUID, name string, a tailnet.CoordinateeAuth) (chan<- *tailnetproto.CoordinateRequest, <-chan *tailnetproto.CoordinateResponse) {
-	c.lastPeerID = id
-	return c.Coordinator.Coordinate(ctx, id, name, a)
+func (r *resumeTokenRecordingProvider) GenerateResumeToken(peerID uuid.UUID) (*tailnetproto.RefreshResumeTokenResponse, error) {
+	select {
+	case r.generateCalls <- peerID:
+		return r.ResumeTokenProvider.GenerateResumeToken(peerID)
+	default:
+		r.t.Error("generateCalls full")
+		return nil, xerrors.New("generateCalls full")
+	}
+}
+
+func (r *resumeTokenRecordingProvider) VerifyResumeToken(token string) (uuid.UUID, error) {
+	select {
+	case r.verifyCalls <- token:
+		return r.ResumeTokenProvider.VerifyResumeToken(token)
+	default:
+		r.t.Error("verifyCalls full")
+		return uuid.Nil, xerrors.New("verifyCalls full")
+	}
 }
 
 func TestWorkspaceAgentClientCoordinate_ResumeToken(t *testing.T) {
@@ -537,12 +558,12 @@ func TestWorkspaceAgentClientCoordinate_ResumeToken(t *testing.T) {
 	clock := quartz.NewMock(t)
 	resumeTokenSigningKey, err := tailnet.GenerateResumeTokenSigningKey()
 	require.NoError(t, err)
-	resumeTokenProvider := tailnet.NewResumeTokenKeyProvider(resumeTokenSigningKey, clock, time.Hour)
-	coordinator := &resumeTokenTestFakeCoordinator{
-		Coordinator: tailnet.NewCoordinator(logger),
-	}
+	resumeTokenProvider := newResumeTokenRecordingProvider(
+		t,
+		tailnet.NewResumeTokenKeyProvider(resumeTokenSigningKey, clock, time.Hour),
+	)
 	client, closer, api := coderdtest.NewWithAPI(t, &coderdtest.Options{
-		Coordinator:                    coordinator,
+		Coordinator:                    tailnet.NewCoordinator(logger),
 		CoordinatorResumeTokenProvider: resumeTokenProvider,
 	})
 	defer closer.Close()
@@ -562,25 +583,25 @@ func TestWorkspaceAgentClientCoordinate_ResumeToken(t *testing.T) {
 
 	// Connect with no resume token, and ensure that the peer ID is set to a
 	// random value.
-	coordinator.lastPeerID = uuid.Nil
 	originalResumeToken, err := connectToCoordinatorAndFetchResumeToken(ctx, logger, client, agentAndBuild.WorkspaceAgent.ID, "")
 	require.NoError(t, err)
-	originalPeerID := coordinator.lastPeerID
+	originalPeerID := testutil.RequireRecvCtx(ctx, t, resumeTokenProvider.generateCalls)
 	require.NotEqual(t, originalPeerID, uuid.Nil)
 
 	// Connect with a valid resume token, and ensure that the peer ID is set to
 	// the stored value.
 	clock.Advance(time.Second)
-	coordinator.lastPeerID = uuid.Nil
 	newResumeToken, err := connectToCoordinatorAndFetchResumeToken(ctx, logger, client, agentAndBuild.WorkspaceAgent.ID, originalResumeToken)
 	require.NoError(t, err)
-	require.Equal(t, originalPeerID, coordinator.lastPeerID)
+	verifiedToken := testutil.RequireRecvCtx(ctx, t, resumeTokenProvider.verifyCalls)
+	require.Equal(t, originalResumeToken, verifiedToken)
+	newPeerID := testutil.RequireRecvCtx(ctx, t, resumeTokenProvider.generateCalls)
+	require.Equal(t, originalPeerID, newPeerID)
 	require.NotEqual(t, originalResumeToken, newResumeToken)
 
 	// Connect with an invalid resume token, and ensure that the request is
 	// rejected.
 	clock.Advance(time.Second)
-	coordinator.lastPeerID = uuid.Nil
 	_, err = connectToCoordinatorAndFetchResumeToken(ctx, logger, client, agentAndBuild.WorkspaceAgent.ID, "invalid")
 	require.Error(t, err)
 	var sdkErr *codersdk.Error
@@ -588,7 +609,14 @@ func TestWorkspaceAgentClientCoordinate_ResumeToken(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, sdkErr.StatusCode())
 	require.Len(t, sdkErr.Validations, 1)
 	require.Equal(t, "resume_token", sdkErr.Validations[0].Field)
-	require.Equal(t, uuid.Nil, coordinator.lastPeerID)
+	verifiedToken = testutil.RequireRecvCtx(ctx, t, resumeTokenProvider.verifyCalls)
+	require.Equal(t, "invalid", verifiedToken)
+
+	select {
+	case <-resumeTokenProvider.generateCalls:
+		t.Fatal("unexpected peer ID in channel")
+	default:
+	}
 }
 
 // connectToCoordinatorAndFetchResumeToken connects to the tailnet coordinator
@@ -629,21 +657,6 @@ func connectToCoordinatorAndFetchResumeToken(ctx context.Context, logger slog.Lo
 	)
 	if err != nil {
 		return "", xerrors.Errorf("new dRPC client: %w", err)
-	}
-
-	// Send an empty coordination request. This will do nothing on the server,
-	// but ensures our wrapped coordinator can record the peer ID.
-	coordinateClient, err := rpcClient.Coordinate(ctx)
-	if err != nil {
-		return "", xerrors.Errorf("coordinate: %w", err)
-	}
-	err = coordinateClient.Send(&tailnetproto.CoordinateRequest{})
-	if err != nil {
-		return "", xerrors.Errorf("send empty coordination request: %w", err)
-	}
-	err = coordinateClient.Close()
-	if err != nil {
-		return "", xerrors.Errorf("close coordination request: %w", err)
 	}
 
 	// Fetch a resume token.
