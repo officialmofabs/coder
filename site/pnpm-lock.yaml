@@ -196,8 +196,8 @@ importers:
         specifier: 1.0.40
         version: 1.0.40
       ua-parser-js:
-        specifier: 1.0.33
-        version: 1.0.33
+        specifier: 1.0.39
+        version: 1.0.39
       ufuzzy:
         specifier: npm:@leeoniya/ufuzzy@1.0.10
         version: '@leeoniya/ufuzzy@1.0.10'
@@ -5742,8 +5742,9 @@ packages:
   tzdata@1.0.40:
     resolution: {integrity: sha512-IsWNGfC5GrVPG4ejYJtf3tOlBdJYs0uNzv1a+vkdANHDq2kPg4oAN2UlCfpqrCwErPZVhI6MLA2gkeuXAVnpLg==}
 
-  ua-parser-js@1.0.33:
-    resolution: {integrity: sha512-RqshF7TPTE0XLYAqmjlu5cLLuGdKrNu9O1KLA/qp39QtbZwuzwv1dT46DZSopoUMsYgXpB3Cv8a03FI8b74oFQ==}
+  ua-parser-js@1.0.39:
+    resolution: {integrity: sha512-k24RCVWlEcjkdOxYmVJgeD/0a1TiSpqLg+ZalVGV9lsnr4yqu0w7tX/x2xX6G4zpkgQnRf89lxuZ1wsbjXM8lw==}
+    hasBin: true
 
   uglify-js@3.18.0:
     resolution: {integrity: sha512-SyVVbcNBCk0dzr9XL/R/ySrmYf0s372K6/hFklzgcp2lBFyXtw4I7BOdDjlLhE1aVqaI/SHWXWmYdlZxuyF38A==}
@@ -12331,7 +12332,7 @@ snapshots:
 
   tzdata@1.0.40: {}
 
-  ua-parser-js@1.0.33: {}
+  ua-parser-js@1.0.39: {}
 
   uglify-js@3.18.0:
     optional: true

@@ -94,7 +94,7 @@
 		"rollup-plugin-visualizer": "5.12.0",
 		"semver": "7.6.2",
 		"tzdata": "1.0.40",
-		"ua-parser-js": "1.0.33",
+		"ua-parser-js": "1.0.39",
 		"ufuzzy": "npm:@leeoniya/ufuzzy@1.0.10",
 		"undici": "6.19.7",
 		"unique-names-generator": "4.7.1",
