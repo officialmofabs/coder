@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
       time: "06:00"
-      timezone: "America/Chicago"
+      timezone: "Europe/London"
     labels: []
     commit-message:
       prefix: "ci"
