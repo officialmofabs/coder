@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/emersion/go-sasl"
@@ -157,7 +158,7 @@ func TestSMTPDispatch(t *testing.T) {
 		Smarthost: serpent.HostPort{Host: "localhost", Port: fmt.Sprintf("%d", mockSMTPSrv.PortNumber())},
 		Hello:     "localhost",
 	}
-	handler := newDispatchInterceptor(dispatch.NewSMTPHandler(cfg.SMTP, defaultHelpers(), logger.Named("smtp")))
+	handler := newDispatchInterceptor(dispatch.NewSMTPHandler(cfg.SMTP, logger.Named("smtp")))
 	mgr, err := notifications.NewManager(cfg, store, defaultHelpers(), createMetrics(), logger.Named("manager"))
 	require.NoError(t, err)
 	mgr.WithHandlers(map[database.NotificationMethod]notifications.Handler{method: handler})
@@ -751,6 +752,9 @@ func TestNotificationTemplates_Golden(t *testing.T) {
 		name    string
 		id      uuid.UUID
 		payload types.MessagePayload
+
+		appName string
+		logoURL string
 	}{
 		{
 			name: "TemplateWorkspaceDeleted",
@@ -994,10 +998,40 @@ func TestNotificationTemplates_Golden(t *testing.T) {
 			id:   notifications.TemplateUserRequestedOneTimePasscode,
 			payload: types.MessagePayload{
 				UserName:     "Bobby",
-				UserEmail:    "bobby@coder.com",
+				UserEmail:    "bobby/drop-table+user@coder.com",
 				UserUsername: "bobby",
 				Labels: map[string]string{
 					"one_time_passcode": "fad9020b-6562-4cdb-87f1-0486f1bea415",
+				},
+			},
+		},
+		{
+			name: "TemplateWorkspaceDeleted_CustomAppearance",
+			id:   notifications.TemplateWorkspaceDeleted,
+			payload: types.MessagePayload{
+				UserName:     "Bobby",
+				UserEmail:    "bobby@coder.com",
+				UserUsername: "bobby",
+				Labels: map[string]string{
+					"name":      "bobby-workspace",
+					"reason":    "autodeleted due to dormancy",
+					"initiator": "autobuild",
+				},
+			},
+			appName: "Custom Application Name",
+			logoURL: "https://custom.application/logo.png",
+		},
+		{
+			name: "TemplateTemplateDeprecated",
+			id:   notifications.TemplateTemplateDeprecated,
+			payload: types.MessagePayload{
+				UserName:     "Bobby",
+				UserEmail:    "bobby@coder.com",
+				UserUsername: "bobby",
+				Labels: map[string]string{
+					"template":     "alpha",
+					"message":      "This template has been replaced by beta",
+					"organization": "coder",
 				},
 			},
 		},
@@ -1121,6 +1155,19 @@ func TestNotificationTemplates_Golden(t *testing.T) {
 					logger.Named("manager"),
 				)
 				require.NoError(t, err)
+
+				// we apply ApplicationName and LogoURL changes directly in the db
+				// as appearance changes are enterprise features and we do not want to mix those
+				// can't use the api
+				if tc.appName != "" {
+					err = (*db).UpsertApplicationName(ctx, "Custom Application")
+					require.NoError(t, err)
+				}
+
+				if tc.logoURL != "" {
+					err = (*db).UpsertLogoURL(ctx, "https://custom.application/logo.png")
+					require.NoError(t, err)
+				}
 
 				smtpManager.Run(ctx)
 
@@ -1460,12 +1507,12 @@ func TestCustomNotificationMethod(t *testing.T) {
 
 	// GIVEN: a notification template which has a method explicitly set
 	var (
-		template      = notifications.TemplateWorkspaceDormant
+		tmpl          = notifications.TemplateWorkspaceDormant
 		defaultMethod = database.NotificationMethodSmtp
 		customMethod  = database.NotificationMethodWebhook
 	)
 	out, err := store.UpdateNotificationTemplateMethodByID(ctx, database.UpdateNotificationTemplateMethodByIDParams{
-		ID:     template,
+		ID:     tmpl,
 		Method: database.NullNotificationMethod{NotificationMethod: customMethod, Valid: true},
 	})
 	require.NoError(t, err)
@@ -1493,7 +1540,7 @@ func TestCustomNotificationMethod(t *testing.T) {
 
 	// WHEN: a notification of that template is enqueued, it should be delivered with the configured method - not the default.
 	user := createSampleUser(t, store)
-	msgID, err := enq.Enqueue(ctx, user.ID, template, map[string]string{}, "test")
+	msgID, err := enq.Enqueue(ctx, user.ID, tmpl, map[string]string{}, "test")
 	require.NoError(t, err)
 
 	// THEN: the notification should be received by the custom dispatch method
@@ -1609,7 +1656,7 @@ type fakeHandler struct {
 	succeeded, failed []string
 }
 
-func (f *fakeHandler) Dispatcher(payload types.MessagePayload, _, _ string) (dispatch.DeliveryFunc, error) {
+func (f *fakeHandler) Dispatcher(payload types.MessagePayload, _, _ string, _ template.FuncMap) (dispatch.DeliveryFunc, error) {
 	return func(_ context.Context, msgID uuid.UUID) (retryable bool, err error) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
