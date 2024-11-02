@@ -813,7 +813,7 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				}
 				defer options.Telemetry.Close()
 			} else {
-				logger.Warn(ctx, fmt.Sprintf(`telemetry disabled, unable to notify of security issues. Read more: %s/admin/telemetry`, vals.DocsURL.String()))
+				logger.Warn(ctx, fmt.Sprintf(`telemetry disabled, unable to notify of security issues. Read more: %s/admin/setup/telemetry`, vals.DocsURL.String()))
 			}
 
 			// This prevents the pprof import from being accidentally deleted.
@@ -916,8 +916,8 @@ func (r *RootCmd) Server(newAPI func(context.Context, *coderd.Options) (*coderd.
 				return xerrors.Errorf("failed to instantiate notification manager: %w", err)
 			}
 
-			// nolint:gocritic // TODO: create own role.
-			notificationsManager.Run(dbauthz.AsSystemRestricted(ctx))
+			// nolint:gocritic // We need to run the manager in a notifier context.
+			notificationsManager.Run(dbauthz.AsNotifier(ctx))
 
 			// Run report generator to distribute periodic reports.
 			notificationReportGenerator := reports.NewReportGenerator(ctx, logger.Named("notifications.report_generator"), options.Database, options.NotificationsEnqueuer, quartz.NewReal())
