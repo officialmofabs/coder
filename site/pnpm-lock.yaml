@@ -13,8 +13,8 @@ importers:
   .:
     dependencies:
       '@alwaysmeticulous/recorder-loader':
-        specifier: 2.137.0
-        version: 2.137.0
+        specifier: 2.169.0
+        version: 2.169.0
       '@emoji-mart/data':
         specifier: 1.2.1
         version: 1.2.1
@@ -450,8 +450,8 @@ packages:
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
 
-  '@alwaysmeticulous/recorder-loader@2.137.0':
-    resolution: {integrity: sha512-ux/xGYCNsOe8BzquEg7k7YSNJiw/0Sg2Pd/7fppYiVr5xEefpPeIhh3qwuupZgx6sB2t5KpKQdodNWVmGeyh/w==}
+  '@alwaysmeticulous/recorder-loader@2.169.0':
+    resolution: {integrity: sha512-wuH47XitzBiq5aK17Vg1j/dGVjO12Fi48y1L2R75401WbHXuQRsoSXul0jKH9oSR8gaThAaoEOs86AZYx/ksxQ==}
 
   '@ampproject/remapping@2.3.0':
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
@@ -3539,6 +3539,7 @@ packages:
   eslint@8.52.0:
     resolution: {integrity: sha512-zh/JHnaixqHZsolRB/w9/02akBk9EPrOs9JwcTP2ek7yL5bVvXuRariiaAjjoJ5DvuwQ1WAE/HsMz+w17YgBCg==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
 
   espree@9.6.1:
@@ -6273,7 +6274,7 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@alwaysmeticulous/recorder-loader@2.137.0': {}
+  '@alwaysmeticulous/recorder-loader@2.169.0': {}
 
   '@ampproject/remapping@2.3.0':
     dependencies:
