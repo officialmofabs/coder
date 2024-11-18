@@ -67,8 +67,6 @@ func newScreen(ctx context.Context, cmd *pty.Cmd, options *Options, logger slog.
 		timeout: options.Timeout,
 	}
 
-	go rpty.lifecycle(ctx, logger)
-
 	// Socket paths are limited to around 100 characters on Linux and macOS which
 	// depending on the temporary directory can be a problem.  To give more leeway
 	// use a short ID.
@@ -123,6 +121,8 @@ func newScreen(ctx context.Context, cmd *pty.Cmd, options *Options, logger slog.
 		rpty.state.setState(StateDone, xerrors.Errorf("create config file: %w", err))
 		return rpty
 	}
+
+	go rpty.lifecycle(ctx, logger)
 
 	return rpty
 }

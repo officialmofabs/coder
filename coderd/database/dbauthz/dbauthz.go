@@ -178,6 +178,8 @@ var (
 					// this can be reduced to read a specific org.
 					rbac.ResourceOrganization.Type: {policy.ActionRead},
 					rbac.ResourceGroup.Type:        {policy.ActionRead},
+					// Provisionerd creates notification messages
+					rbac.ResourceNotificationMessage.Type: {policy.ActionCreate, policy.ActionRead},
 				}),
 				Org:  map[string][]rbac.Permission{},
 				User: []rbac.Permission{},
@@ -194,11 +196,12 @@ var (
 				Identifier:  rbac.RoleIdentifier{Name: "autostart"},
 				DisplayName: "Autostart Daemon",
 				Site: rbac.Permissions(map[string][]policy.Action{
-					rbac.ResourceSystem.Type:           {policy.WildcardSymbol},
-					rbac.ResourceTemplate.Type:         {policy.ActionRead, policy.ActionUpdate},
-					rbac.ResourceWorkspaceDormant.Type: {policy.ActionDelete, policy.ActionRead, policy.ActionUpdate, policy.ActionWorkspaceStop},
-					rbac.ResourceWorkspace.Type:        {policy.ActionDelete, policy.ActionRead, policy.ActionUpdate, policy.ActionWorkspaceStart, policy.ActionWorkspaceStop},
-					rbac.ResourceUser.Type:             {policy.ActionRead},
+					rbac.ResourceNotificationMessage.Type: {policy.ActionCreate, policy.ActionRead},
+					rbac.ResourceSystem.Type:              {policy.WildcardSymbol},
+					rbac.ResourceTemplate.Type:            {policy.ActionRead, policy.ActionUpdate},
+					rbac.ResourceUser.Type:                {policy.ActionRead},
+					rbac.ResourceWorkspace.Type:           {policy.ActionDelete, policy.ActionRead, policy.ActionUpdate, policy.ActionWorkspaceStart, policy.ActionWorkspaceStop},
+					rbac.ResourceWorkspaceDormant.Type:    {policy.ActionDelete, policy.ActionRead, policy.ActionUpdate, policy.ActionWorkspaceStop},
 				}),
 				Org:  map[string][]rbac.Permission{},
 				User: []rbac.Permission{},
@@ -1887,7 +1890,7 @@ func (q *querier) GetProvisionerDaemons(ctx context.Context) ([]database.Provisi
 	return fetchWithPostFilter(q.auth, policy.ActionRead, fetch)(ctx, nil)
 }
 
-func (q *querier) GetProvisionerDaemonsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]database.ProvisionerDaemon, error) {
+func (q *querier) GetProvisionerDaemonsByOrganization(ctx context.Context, organizationID database.GetProvisionerDaemonsByOrganizationParams) ([]database.ProvisionerDaemon, error) {
 	return fetchWithPostFilter(q.auth, policy.ActionRead, q.db.GetProvisionerDaemonsByOrganization)(ctx, organizationID)
 }
 
@@ -2663,6 +2666,20 @@ func (q *querier) GetWorkspaceByWorkspaceAppID(ctx context.Context, workspaceApp
 	return fetch(q.log, q.auth, q.db.GetWorkspaceByWorkspaceAppID)(ctx, workspaceAppID)
 }
 
+func (q *querier) GetWorkspaceModulesByJobID(ctx context.Context, jobID uuid.UUID) ([]database.WorkspaceModule, error) {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
+		return nil, err
+	}
+	return q.db.GetWorkspaceModulesByJobID(ctx, jobID)
+}
+
+func (q *querier) GetWorkspaceModulesCreatedAfter(ctx context.Context, createdAt time.Time) ([]database.WorkspaceModule, error) {
+	if err := q.authorizeContext(ctx, policy.ActionRead, rbac.ResourceSystem); err != nil {
+		return nil, err
+	}
+	return q.db.GetWorkspaceModulesCreatedAfter(ctx, createdAt)
+}
+
 func (q *querier) GetWorkspaceProxies(ctx context.Context) ([]database.WorkspaceProxy, error) {
 	return fetchWithPostFilter(q.auth, policy.ActionRead, func(ctx context.Context, _ interface{}) ([]database.WorkspaceProxy, error) {
 		return q.db.GetWorkspaceProxies(ctx)
@@ -2800,7 +2817,7 @@ func (q *querier) GetWorkspacesAndAgentsByOwnerID(ctx context.Context, ownerID u
 	return q.db.GetAuthorizedWorkspacesAndAgentsByOwnerID(ctx, ownerID, prep)
 }
 
-func (q *querier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.WorkspaceTable, error) {
+func (q *querier) GetWorkspacesEligibleForTransition(ctx context.Context, now time.Time) ([]database.GetWorkspacesEligibleForTransitionRow, error) {
 	return q.db.GetWorkspacesEligibleForTransition(ctx, now)
 }
 
@@ -3217,6 +3234,13 @@ func (q *querier) InsertWorkspaceBuildParameters(ctx context.Context, arg databa
 	}
 
 	return q.db.InsertWorkspaceBuildParameters(ctx, arg)
+}
+
+func (q *querier) InsertWorkspaceModule(ctx context.Context, arg database.InsertWorkspaceModuleParams) (database.WorkspaceModule, error) {
+	if err := q.authorizeContext(ctx, policy.ActionCreate, rbac.ResourceSystem); err != nil {
+		return database.WorkspaceModule{}, err
+	}
+	return q.db.InsertWorkspaceModule(ctx, arg)
 }
 
 func (q *querier) InsertWorkspaceProxy(ctx context.Context, arg database.InsertWorkspaceProxyParams) (database.WorkspaceProxy, error) {
