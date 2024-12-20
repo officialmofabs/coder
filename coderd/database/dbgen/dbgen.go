@@ -220,16 +220,29 @@ func WorkspaceAgentScriptTimings(t testing.TB, db database.Store, script databas
 }
 
 func WorkspaceAgentScriptTiming(t testing.TB, db database.Store, orig database.WorkspaceAgentScriptTiming) database.WorkspaceAgentScriptTiming {
-	timing, err := db.InsertWorkspaceAgentScriptTimings(genCtx, database.InsertWorkspaceAgentScriptTimingsParams{
-		StartedAt: takeFirst(orig.StartedAt, dbtime.Now()),
-		EndedAt:   takeFirst(orig.EndedAt, dbtime.Now()),
-		Stage:     takeFirst(orig.Stage, database.WorkspaceAgentScriptTimingStageStart),
-		ScriptID:  takeFirst(orig.ScriptID, uuid.New()),
-		ExitCode:  takeFirst(orig.ExitCode, 0),
-		Status:    takeFirst(orig.Status, database.WorkspaceAgentScriptTimingStatusOk),
-	})
-	require.NoError(t, err, "insert workspace agent script")
-	return timing
+	// retry a few times in case of a unique constraint violation
+	for i := 0; i < 10; i++ {
+		timing, err := db.InsertWorkspaceAgentScriptTimings(genCtx, database.InsertWorkspaceAgentScriptTimingsParams{
+			StartedAt: takeFirst(orig.StartedAt, dbtime.Now()),
+			EndedAt:   takeFirst(orig.EndedAt, dbtime.Now()),
+			Stage:     takeFirst(orig.Stage, database.WorkspaceAgentScriptTimingStageStart),
+			ScriptID:  takeFirst(orig.ScriptID, uuid.New()),
+			ExitCode:  takeFirst(orig.ExitCode, 0),
+			Status:    takeFirst(orig.Status, database.WorkspaceAgentScriptTimingStatusOk),
+		})
+		if err == nil {
+			return timing
+		}
+		// Some tests run WorkspaceAgentScriptTiming in a loop and run into
+		// a unique violation - 2 rows get the same started_at value.
+		if (database.IsUniqueViolation(err, database.UniqueWorkspaceAgentScriptTimingsScriptIDStartedAtKey) && orig.StartedAt == time.Time{}) {
+			// Wait 1 millisecond so dbtime.Now() changes
+			time.Sleep(time.Millisecond * 1)
+			continue
+		}
+		require.NoError(t, err, "insert workspace agent script")
+	}
+	panic("failed to insert workspace agent script timing")
 }
 
 func Workspace(t testing.TB, db database.Store, orig database.WorkspaceTable) database.WorkspaceTable {
@@ -247,6 +260,7 @@ func Workspace(t testing.TB, db database.Store, orig database.WorkspaceTable) da
 		AutostartSchedule: orig.AutostartSchedule,
 		Ttl:               orig.Ttl,
 		AutomaticUpdates:  takeFirst(orig.AutomaticUpdates, database.AutomaticUpdatesNever),
+		NextStartAt:       orig.NextStartAt,
 	})
 	require.NoError(t, err, "insert workspace")
 	return workspace
@@ -487,6 +501,46 @@ func GroupMember(t testing.TB, db database.Store, member database.GroupMemberTab
 	}
 
 	return groupMember
+}
+
+// ProvisionerDaemon creates a provisioner daemon as far as the database is concerned. It does not run a provisioner daemon.
+// If no key is provided, it will create one.
+func ProvisionerDaemon(t testing.TB, db database.Store, daemon database.ProvisionerDaemon) database.ProvisionerDaemon {
+	t.Helper()
+
+	if daemon.KeyID == uuid.Nil {
+		key, err := db.InsertProvisionerKey(genCtx, database.InsertProvisionerKeyParams{
+			ID:             uuid.New(),
+			Name:           daemon.Name + "-key",
+			OrganizationID: daemon.OrganizationID,
+			HashedSecret:   []byte("secret"),
+			CreatedAt:      dbtime.Now(),
+			Tags:           daemon.Tags,
+		})
+		require.NoError(t, err)
+		daemon.KeyID = key.ID
+	}
+
+	if daemon.CreatedAt.IsZero() {
+		daemon.CreatedAt = dbtime.Now()
+	}
+	if daemon.Name == "" {
+		daemon.Name = "test-daemon"
+	}
+
+	d, err := db.UpsertProvisionerDaemon(genCtx, database.UpsertProvisionerDaemonParams{
+		Name:           daemon.Name,
+		OrganizationID: daemon.OrganizationID,
+		CreatedAt:      daemon.CreatedAt,
+		Provisioners:   daemon.Provisioners,
+		Tags:           daemon.Tags,
+		KeyID:          daemon.KeyID,
+		LastSeenAt:     daemon.LastSeenAt,
+		Version:        daemon.Version,
+		APIVersion:     daemon.APIVersion,
+	})
+	require.NoError(t, err)
+	return d
 }
 
 // ProvisionerJob is a bit more involved to get the values such as "completedAt", "startedAt", "cancelledAt" set.  ps
@@ -775,16 +829,17 @@ func TemplateVersion(t testing.TB, db database.Store, orig database.TemplateVers
 	err := db.InTx(func(db database.Store) error {
 		versionID := takeFirst(orig.ID, uuid.New())
 		err := db.InsertTemplateVersion(genCtx, database.InsertTemplateVersionParams{
-			ID:             versionID,
-			TemplateID:     takeFirst(orig.TemplateID, uuid.NullUUID{}),
-			OrganizationID: takeFirst(orig.OrganizationID, uuid.New()),
-			CreatedAt:      takeFirst(orig.CreatedAt, dbtime.Now()),
-			UpdatedAt:      takeFirst(orig.UpdatedAt, dbtime.Now()),
-			Name:           takeFirst(orig.Name, testutil.GetRandomName(t)),
-			Message:        orig.Message,
-			Readme:         takeFirst(orig.Readme, testutil.GetRandomName(t)),
-			JobID:          takeFirst(orig.JobID, uuid.New()),
-			CreatedBy:      takeFirst(orig.CreatedBy, uuid.New()),
+			ID:              versionID,
+			TemplateID:      takeFirst(orig.TemplateID, uuid.NullUUID{}),
+			OrganizationID:  takeFirst(orig.OrganizationID, uuid.New()),
+			CreatedAt:       takeFirst(orig.CreatedAt, dbtime.Now()),
+			UpdatedAt:       takeFirst(orig.UpdatedAt, dbtime.Now()),
+			Name:            takeFirst(orig.Name, testutil.GetRandomName(t)),
+			Message:         orig.Message,
+			Readme:          takeFirst(orig.Readme, testutil.GetRandomName(t)),
+			JobID:           takeFirst(orig.JobID, uuid.New()),
+			CreatedBy:       takeFirst(orig.CreatedBy, uuid.New()),
+			SourceExampleID: takeFirst(orig.SourceExampleID, sql.NullString{}),
 		})
 		if err != nil {
 			return err

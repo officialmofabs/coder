@@ -27,11 +27,14 @@ import WorkspacesPage from "./pages/WorkspacesPage/WorkspacesPage";
 // - Pages that are secondary, not in the main navigation or not usually accessed
 // - Pages that use heavy dependencies like charts or time libraries
 const NotFoundPage = lazy(() => import("./pages/404Page/404Page"));
-const ManagementSettingsLayout = lazy(
-	() => import("./modules/management/ManagementSettingsLayout"),
+const DeploymentSettingsLayout = lazy(
+	() => import("./modules/management/DeploymentSettingsLayout"),
 );
 const DeploymentSettingsProvider = lazy(
 	() => import("./modules/management/DeploymentSettingsProvider"),
+);
+const OrganizationSettingsLayout = lazy(
+	() => import("./modules/management/OrganizationSettingsLayout"),
 );
 const CliAuthenticationPage = lazy(
 	() => import("./pages/CliAuthPage/CliAuthPage"),
@@ -301,6 +304,9 @@ const RequestOTPPage = lazy(
 const ChangePasswordPage = lazy(
 	() => import("./pages/ResetPasswordPage/ChangePasswordPage"),
 );
+const IdpOrgSyncPage = lazy(
+	() => import("./pages/DeploymentSettingsPage/IdpOrgSyncPage/IdpOrgSyncPage"),
+);
 
 const RoutesWithSuspense = () => {
 	return (
@@ -411,7 +417,7 @@ export const router = createBrowserRouter(
 
 					<Route path="/audit" element={<AuditPage />} />
 
-					<Route path="/organizations" element={<ManagementSettingsLayout />}>
+					<Route path="/organizations" element={<OrganizationSettingsLayout />}>
 						<Route path="new" element={<CreateOrganizationPage />} />
 
 						{/* General settings for the default org can omit the organization name */}
@@ -434,7 +440,7 @@ export const router = createBrowserRouter(
 						</Route>
 					</Route>
 
-					<Route path="/deployment" element={<ManagementSettingsLayout />}>
+					<Route path="/deployment" element={<DeploymentSettingsLayout />}>
 						<Route element={<DeploymentSettingsProvider />}>
 							<Route path="general" element={<GeneralSettingsPage />} />
 							<Route path="security" element={<SecuritySettingsPage />} />
@@ -453,6 +459,7 @@ export const router = createBrowserRouter(
 								path="notifications"
 								element={<DeploymentNotificationsPage />}
 							/>
+							<Route path="idp-org-sync" element={<IdpOrgSyncPage />} />
 							<Route path="premium" element={<PremiumPage />} />
 						</Route>
 

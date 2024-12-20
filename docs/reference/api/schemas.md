@@ -187,23 +187,23 @@
 
 ### Properties
 
-| Name             | Type               | Required | Restrictions | Description |
-| ---------------- | ------------------ | -------- | ------------ | ----------- |
-| `active`         | boolean            | false    |              |             |
-| `emails`         | array of object    | false    |              |             |
-| `» display`      | string             | false    |              |             |
-| `» primary`      | boolean            | false    |              |             |
-| `» type`         | string             | false    |              |             |
-| `» value`        | string             | false    |              |             |
-| `groups`         | array of undefined | false    |              |             |
-| `id`             | string             | false    |              |             |
-| `meta`           | object             | false    |              |             |
-| `» resourceType` | string             | false    |              |             |
-| `name`           | object             | false    |              |             |
-| `» familyName`   | string             | false    |              |             |
-| `» givenName`    | string             | false    |              |             |
-| `schemas`        | array of string    | false    |              |             |
-| `userName`       | string             | false    |              |             |
+| Name             | Type               | Required | Restrictions | Description                                                                 |
+| ---------------- | ------------------ | -------- | ------------ | --------------------------------------------------------------------------- |
+| `active`         | boolean            | false    |              | Active is a ptr to prevent the empty value from being interpreted as false. |
+| `emails`         | array of object    | false    |              |                                                                             |
+| `» display`      | string             | false    |              |                                                                             |
+| `» primary`      | boolean            | false    |              |                                                                             |
+| `» type`         | string             | false    |              |                                                                             |
+| `» value`        | string             | false    |              |                                                                             |
+| `groups`         | array of undefined | false    |              |                                                                             |
+| `id`             | string             | false    |              |                                                                             |
+| `meta`           | object             | false    |              |                                                                             |
+| `» resourceType` | string             | false    |              |                                                                             |
+| `name`           | object             | false    |              |                                                                             |
+| `» familyName`   | string             | false    |              |                                                                             |
+| `» givenName`    | string             | false    |              |                                                                             |
+| `schemas`        | array of string    | false    |              |                                                                             |
+| `userName`       | string             | false    |              |                                                                             |
 
 ## coderd.cspViolation
 
@@ -1400,7 +1400,7 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 	],
 	"state": [0],
 	"template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
-	"transition": "create"
+	"transition": "start"
 }
 ```
 
@@ -1421,7 +1421,6 @@ AuthorizationObject can represent a "set" of objects, such as: all workspaces in
 | Property     | Value    |
 | ------------ | -------- |
 | `log_level`  | `debug`  |
-| `transition` | `create` |
 | `transition` | `start`  |
 | `transition` | `stop`   |
 | `transition` | `delete` |
@@ -1757,6 +1756,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 			"scheme": "string",
 			"user": {}
 		},
+		"additional_csp_policy": ["string"],
 		"address": {
 			"host": "string",
 			"port": "string"
@@ -1884,10 +1884,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 				"force_tls": true,
 				"from": "string",
 				"hello": "string",
-				"smarthost": {
-					"host": "string",
-					"port": "string"
-				},
+				"smarthost": "string",
 				"tls": {
 					"ca_file": "string",
 					"cert_file": "string",
@@ -2184,6 +2181,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 		"scheme": "string",
 		"user": {}
 	},
+	"additional_csp_policy": ["string"],
 	"address": {
 		"host": "string",
 		"port": "string"
@@ -2311,10 +2309,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 			"force_tls": true,
 			"from": "string",
 			"hello": "string",
-			"smarthost": {
-				"host": "string",
-				"port": "string"
-			},
+			"smarthost": "string",
 			"tls": {
 				"ca_file": "string",
 				"cert_file": "string",
@@ -2521,6 +2516,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | Name                                 | Type                                                                                                 | Required | Restrictions | Description                                                        |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------- | ------------ | ------------------------------------------------------------------ |
 | `access_url`                         | [serpent.URL](#serpenturl)                                                                           | false    |              |                                                                    |
+| `additional_csp_policy`              | array of string                                                                                      | false    |              |                                                                    |
 | `address`                            | [serpent.HostPort](#serpenthostport)                                                                 | false    |              | Address Use HTTPAddress or TLS.Address instead.                    |
 | `agent_fallback_troubleshooting_url` | [serpent.URL](#serpenturl)                                                                           | false    |              |                                                                    |
 | `agent_stat_refresh_interval`        | integer                                                                                              | false    |              |                                                                    |
@@ -3030,10 +3026,10 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | Name                         | Type                           | Required | Restrictions | Description                                                                                                                                                                                                                                                                            |
 | ---------------------------- | ------------------------------ | -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auto_create_missing_groups` | boolean                        | false    |              | Auto create missing groups controls whether groups returned by the OIDC provider are automatically created in Coder if they are missing.                                                                                                                                               |
-| `field`                      | string                         | false    |              | Field selects the claim field to be used as the created user's groups. If the group field is the empty string, then no group updates will ever come from the OIDC provider.                                                                                                            |
+| `field`                      | string                         | false    |              | Field is the name of the claim field that specifies what groups a user should be in. If empty, no groups will be synced.                                                                                                                                                               |
 | `legacy_group_name_mapping`  | object                         | false    |              | Legacy group name mapping is deprecated. It remaps an IDP group name to a Coder group name. Since configuration is now done at runtime, group IDs are used to account for group renames. For legacy configurations, this config option has to remain. Deprecated: Use Mapping instead. |
 | » `[any property]`           | string                         | false    |              |                                                                                                                                                                                                                                                                                        |
-| `mapping`                    | object                         | false    |              | Mapping maps from an OIDC group --> Coder group ID                                                                                                                                                                                                                                     |
+| `mapping`                    | object                         | false    |              | Mapping is a map from OIDC groups to Coder group IDs                                                                                                                                                                                                                                   |
 | » `[any property]`           | array of string                | false    |              |                                                                                                                                                                                                                                                                                        |
 | `regex_filter`               | [regexp.Regexp](#regexpregexp) | false    |              | Regex filter is a regular expression that filters the groups returned by the OIDC provider. Any group not matched by this regex will be ignored. If the group filter is nil, then no group filtering will occur.                                                                       |
 
@@ -3302,6 +3298,24 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | --------------- | ------ | -------- | ------------ | ----------- |
 | `session_token` | string | true     |              |             |
 
+## codersdk.MatchedProvisioners
+
+```json
+{
+	"available": 0,
+	"count": 0,
+	"most_recently_seen": "2019-08-24T14:15:22Z"
+}
+```
+
+### Properties
+
+| Name                 | Type    | Required | Restrictions | Description                                                                                                                                                         |
+| -------------------- | ------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `available`          | integer | false    |              | Available is the number of provisioner daemons that are available to take jobs. This may be less than the count if some provisioners are busy or have been stopped. |
+| `count`              | integer | false    |              | Count is the number of provisioner daemons that matched the given tags. If the count is 0, it means no provisioner daemons matched the requested tags.              |
+| `most_recently_seen` | string  | false    |              | Most recently seen is the most recently seen time of the set of matched provisioners. If no provisioners matched, this field will be null.                          |
+
 ## codersdk.MinimalOrganization
 
 ```json
@@ -3417,10 +3431,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 		"force_tls": true,
 		"from": "string",
 		"hello": "string",
-		"smarthost": {
-			"host": "string",
-			"port": "string"
-		},
+		"smarthost": "string",
 		"tls": {
 			"ca_file": "string",
 			"cert_file": "string",
@@ -3505,10 +3516,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 	"force_tls": true,
 	"from": "string",
 	"hello": "string",
-	"smarthost": {
-		"host": "string",
-		"port": "string"
-	},
+	"smarthost": "string",
 	"tls": {
 		"ca_file": "string",
 		"cert_file": "string",
@@ -3528,7 +3536,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `force_tls` | boolean                                                                        | false    |              | Force tls causes a TLS connection to be attempted.                    |
 | `from`      | string                                                                         | false    |              | The sender's address.                                                 |
 | `hello`     | string                                                                         | false    |              | The hostname identifying the SMTP server.                             |
-| `smarthost` | [serpent.HostPort](#serpenthostport)                                           | false    |              | The intermediary SMTP host through which emails are sent (host:port). |
+| `smarthost` | string                                                                         | false    |              | The intermediary SMTP host through which emails are sent (host:port). |
 | `tls`       | [codersdk.NotificationsEmailTLSConfig](#codersdknotificationsemailtlsconfig)   | false    |              | Tls details.                                                          |
 
 ## codersdk.NotificationsEmailTLSConfig
@@ -4868,11 +4876,11 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 
 ### Properties
 
-| Name               | Type            | Required | Restrictions | Description                                                                                                                                                                 |
-| ------------------ | --------------- | -------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field`            | string          | false    |              | Field selects the claim field to be used as the created user's groups. If the group field is the empty string, then no group updates will ever come from the OIDC provider. |
-| `mapping`          | object          | false    |              | Mapping maps from an OIDC group --> Coder organization role                                                                                                                 |
-| » `[any property]` | array of string | false    |              |                                                                                                                                                                             |
+| Name               | Type            | Required | Restrictions | Description                                                                                                                            |
+| ------------------ | --------------- | -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `field`            | string          | false    |              | Field is the name of the claim field that specifies what organization roles a user should be given. If empty, no roles will be synced. |
+| `mapping`          | object          | false    |              | Mapping is a map from OIDC groups to Coder organization roles.                                                                         |
+| » `[any property]` | array of string | false    |              |                                                                                                                                        |
 
 ## codersdk.SSHConfig
 
@@ -5582,6 +5590,11 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 		},
 		"worker_id": "ae5fa6f7-c55b-40c1-b40a-b36ac467652b"
 	},
+	"matched_provisioners": {
+		"available": 0,
+		"count": 0,
+		"most_recently_seen": "2019-08-24T14:15:22Z"
+	},
 	"message": "string",
 	"name": "string",
 	"organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
@@ -5594,20 +5607,21 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 
 ### Properties
 
-| Name              | Type                                                                        | Required | Restrictions | Description |
-| ----------------- | --------------------------------------------------------------------------- | -------- | ------------ | ----------- |
-| `archived`        | boolean                                                                     | false    |              |             |
-| `created_at`      | string                                                                      | false    |              |             |
-| `created_by`      | [codersdk.MinimalUser](#codersdkminimaluser)                                | false    |              |             |
-| `id`              | string                                                                      | false    |              |             |
-| `job`             | [codersdk.ProvisionerJob](#codersdkprovisionerjob)                          | false    |              |             |
-| `message`         | string                                                                      | false    |              |             |
-| `name`            | string                                                                      | false    |              |             |
-| `organization_id` | string                                                                      | false    |              |             |
-| `readme`          | string                                                                      | false    |              |             |
-| `template_id`     | string                                                                      | false    |              |             |
-| `updated_at`      | string                                                                      | false    |              |             |
-| `warnings`        | array of [codersdk.TemplateVersionWarning](#codersdktemplateversionwarning) | false    |              |             |
+| Name                   | Type                                                                        | Required | Restrictions | Description |
+| ---------------------- | --------------------------------------------------------------------------- | -------- | ------------ | ----------- |
+| `archived`             | boolean                                                                     | false    |              |             |
+| `created_at`           | string                                                                      | false    |              |             |
+| `created_by`           | [codersdk.MinimalUser](#codersdkminimaluser)                                | false    |              |             |
+| `id`                   | string                                                                      | false    |              |             |
+| `job`                  | [codersdk.ProvisionerJob](#codersdkprovisionerjob)                          | false    |              |             |
+| `matched_provisioners` | [codersdk.MatchedProvisioners](#codersdkmatchedprovisioners)                | false    |              |             |
+| `message`              | string                                                                      | false    |              |             |
+| `name`                 | string                                                                      | false    |              |             |
+| `organization_id`      | string                                                                      | false    |              |             |
+| `readme`               | string                                                                      | false    |              |             |
+| `template_id`          | string                                                                      | false    |              |             |
+| `updated_at`           | string                                                                      | false    |              |             |
+| `warnings`             | array of [codersdk.TemplateVersionWarning](#codersdktemplateversionwarning) | false    |              |             |
 
 ## codersdk.TemplateVersionExternalAuth
 
@@ -6588,6 +6602,11 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 			},
 			"worker_id": "ae5fa6f7-c55b-40c1-b40a-b36ac467652b"
 		},
+		"matched_provisioners": {
+			"available": 0,
+			"count": 0,
+			"most_recently_seen": "2019-08-24T14:15:22Z"
+		},
 		"max_deadline": "2019-08-24T14:15:22Z",
 		"reason": "initiator",
 		"resources": [
@@ -6714,6 +6733,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 		"workspace_owner_name": "string"
 	},
 	"name": "string",
+	"next_start_at": "2019-08-24T14:15:22Z",
 	"organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
 	"organization_name": "string",
 	"outdated": true,
@@ -6748,6 +6768,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 | `last_used_at`                              | string                                                 | false    |              |                                                                                                                                                                                                                                                       |
 | `latest_build`                              | [codersdk.WorkspaceBuild](#codersdkworkspacebuild)     | false    |              |                                                                                                                                                                                                                                                       |
 | `name`                                      | string                                                 | false    |              |                                                                                                                                                                                                                                                       |
+| `next_start_at`                             | string                                                 | false    |              |                                                                                                                                                                                                                                                       |
 | `organization_id`                           | string                                                 | false    |              |                                                                                                                                                                                                                                                       |
 | `organization_name`                         | string                                                 | false    |              |                                                                                                                                                                                                                                                       |
 | `outdated`                                  | boolean                                                | false    |              |                                                                                                                                                                                                                                                       |
@@ -7286,6 +7307,11 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 		},
 		"worker_id": "ae5fa6f7-c55b-40c1-b40a-b36ac467652b"
 	},
+	"matched_provisioners": {
+		"available": 0,
+		"count": 0,
+		"most_recently_seen": "2019-08-24T14:15:22Z"
+	},
 	"max_deadline": "2019-08-24T14:15:22Z",
 	"reason": "initiator",
 	"resources": [
@@ -7425,6 +7451,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 | `initiator_id`               | string                                                            | false    |              |             |
 | `initiator_name`             | string                                                            | false    |              |             |
 | `job`                        | [codersdk.ProvisionerJob](#codersdkprovisionerjob)                | false    |              |             |
+| `matched_provisioners`       | [codersdk.MatchedProvisioners](#codersdkmatchedprovisioners)      | false    |              |             |
 | `max_deadline`               | string                                                            | false    |              |             |
 | `reason`                     | [codersdk.BuildReason](#codersdkbuildreason)                      | false    |              |             |
 | `resources`                  | array of [codersdk.WorkspaceResource](#codersdkworkspaceresource) | false    |              |             |
@@ -7912,6 +7939,11 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 					},
 					"worker_id": "ae5fa6f7-c55b-40c1-b40a-b36ac467652b"
 				},
+				"matched_provisioners": {
+					"available": 0,
+					"count": 0,
+					"most_recently_seen": "2019-08-24T14:15:22Z"
+				},
 				"max_deadline": "2019-08-24T14:15:22Z",
 				"reason": "initiator",
 				"resources": [
@@ -8034,6 +8066,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 				"workspace_owner_name": "string"
 			},
 			"name": "string",
+			"next_start_at": "2019-08-24T14:15:22Z",
 			"organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
 			"organization_name": "string",
 			"outdated": true,

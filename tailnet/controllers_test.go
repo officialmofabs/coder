@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/xerrors"
@@ -40,7 +40,7 @@ var unimplementedError = drpcerr.WithCode(xerrors.New("Unimplemented"), drpcerr.
 func TestInMemoryCoordination(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	clientID := uuid.UUID{1}
 	agentID := uuid.UUID{2}
 	mCoord := tailnettest.NewMockCoordinator(gomock.NewController(t))
@@ -67,7 +67,7 @@ func TestInMemoryCoordination(t *testing.T) {
 func TestTunnelSrcCoordController_Mainline(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	clientID := uuid.UUID{1}
 	agentID := uuid.UUID{2}
 	mCoord := tailnettest.NewMockCoordinator(gomock.NewController(t))
@@ -124,7 +124,7 @@ func TestTunnelSrcCoordController_Mainline(t *testing.T) {
 func TestTunnelSrcCoordController_AddDestination(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	fConn := &fakeCoordinatee{}
 	uut := tailnet.NewTunnelSrcCoordController(logger, fConn)
@@ -193,7 +193,7 @@ func TestTunnelSrcCoordController_AddDestination(t *testing.T) {
 func TestTunnelSrcCoordController_RemoveDestination(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	fConn := &fakeCoordinatee{}
 	uut := tailnet.NewTunnelSrcCoordController(logger, fConn)
@@ -253,7 +253,7 @@ func TestTunnelSrcCoordController_RemoveDestination(t *testing.T) {
 func TestTunnelSrcCoordController_RemoveDestination_Error(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	fConn := &fakeCoordinatee{}
 	uut := tailnet.NewTunnelSrcCoordController(logger, fConn)
@@ -311,7 +311,7 @@ func TestTunnelSrcCoordController_RemoveDestination_Error(t *testing.T) {
 func TestTunnelSrcCoordController_Sync(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	fConn := &fakeCoordinatee{}
 	uut := tailnet.NewTunnelSrcCoordController(logger, fConn)
@@ -366,7 +366,7 @@ func TestTunnelSrcCoordController_Sync(t *testing.T) {
 func TestTunnelSrcCoordController_AddDestination_Error(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	fConn := &fakeCoordinatee{}
 	uut := tailnet.NewTunnelSrcCoordController(logger, fConn)
@@ -406,7 +406,7 @@ func TestTunnelSrcCoordController_AddDestination_Error(t *testing.T) {
 func TestAgentCoordinationController_SendsReadyForHandshake(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	clientID := uuid.UUID{1}
 	agentID := uuid.UUID{2}
 	mCoord := tailnettest.NewMockCoordinator(gomock.NewController(t))
@@ -584,7 +584,7 @@ func (f *fakeCoordinatee) SetNodeCallback(callback func(*tailnet.Node)) {
 func TestNewBasicDERPController_Mainline(t *testing.T) {
 	t.Parallel()
 	fs := make(chan *tailcfg.DERPMap)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	uut := tailnet.NewBasicDERPController(logger, fakeSetter(fs))
 	fc := fakeDERPClient{
 		ch: make(chan *tailcfg.DERPMap),
@@ -607,7 +607,7 @@ func TestNewBasicDERPController_Mainline(t *testing.T) {
 func TestNewBasicDERPController_RecvErr(t *testing.T) {
 	t.Parallel()
 	fs := make(chan *tailcfg.DERPMap)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	uut := tailnet.NewBasicDERPController(logger, fakeSetter(fs))
 	expectedErr := xerrors.New("a bad thing happened")
 	fc := fakeDERPClient{
@@ -653,7 +653,7 @@ func (f fakeDERPClient) Recv() (*tailcfg.DERPMap, error) {
 func TestBasicTelemetryController_Success(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	uut := tailnet.NewBasicTelemetryController(logger)
 	ft := newFakeTelemetryClient()
@@ -678,7 +678,7 @@ func TestBasicTelemetryController_Success(t *testing.T) {
 func TestBasicTelemetryController_Unimplemented(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
 	ft := newFakeTelemetryClient()
 
@@ -735,7 +735,7 @@ func TestBasicTelemetryController_Unimplemented(t *testing.T) {
 func TestBasicTelemetryController_NotRecognised(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	ft := newFakeTelemetryClient()
 	uut := tailnet.NewBasicTelemetryController(logger)
 	uut.New(ft)
@@ -807,7 +807,7 @@ type fakeTelemetryCall struct {
 func TestBasicResumeTokenController_Mainline(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	fr := newFakeResumeTokenClient(ctx)
 	mClock := quartz.NewMock(t)
 	trp := mClock.Trap().TimerReset("basicResumeTokenRefresher", "refresh")
@@ -865,7 +865,7 @@ func TestBasicResumeTokenController_Mainline(t *testing.T) {
 func TestBasicResumeTokenController_NewWhileRefreshing(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	mClock := quartz.NewMock(t)
 	trp := mClock.Trap().TimerReset("basicResumeTokenRefresher", "refresh")
 	defer trp.Close()
@@ -937,7 +937,7 @@ func TestBasicResumeTokenController_NewWhileRefreshing(t *testing.T) {
 func TestBasicResumeTokenController_Unimplemented(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	mClock := quartz.NewMock(t)
 
 	uut := tailnet.NewBasicResumeTokenController(logger, mClock)
@@ -974,13 +974,13 @@ func (f *fakeResumeTokenClient) RefreshResumeToken(_ context.Context, _ *proto.R
 	}
 	select {
 	case <-f.ctx.Done():
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case f.calls <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case err := <-call.errCh:
 		return nil, err
 	case resp := <-call.resp:
@@ -1071,12 +1071,13 @@ func TestController_Disconnects(t *testing.T) {
 	close(call.Resps)
 
 	_ = testutil.RequireRecvCtx(testCtx, t, peersLost)
+	_ = testutil.RequireRecvCtx(testCtx, t, uut.Closed())
 }
 
 func TestController_TelemetrySuccess(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 	agentID := uuid.UUID{0x55}
 	clientID := uuid.UUID{0x66}
 	fCoord := tailnettest.NewFakeCoordinator()
@@ -1210,24 +1211,28 @@ type pipeDialer struct {
 
 func (p *pipeDialer) Dial(_ context.Context, _ tailnet.ResumeTokenController) (tailnet.ControlProtocolClients, error) {
 	s, c := net.Pipe()
+	p.t.Cleanup(func() {
+		_ = s.Close()
+		_ = c.Close()
+	})
 	go func() {
 		err := p.svc.ServeConnV2(p.ctx, s, p.streamID)
 		p.logger.Debug(p.ctx, "piped tailnet service complete", slog.Error(err))
 	}()
 	client, err := tailnet.NewDRPCClient(c, p.logger)
-	if !assert.NoError(p.t, err) {
+	if err != nil {
 		_ = c.Close()
 		return tailnet.ControlProtocolClients{}, err
 	}
 	coord, err := client.Coordinate(context.Background())
-	if !assert.NoError(p.t, err) {
+	if err != nil {
 		_ = c.Close()
 		return tailnet.ControlProtocolClients{}, err
 	}
 
 	derps := &tailnet.DERPFromDRPCWrapper{}
 	derps.Client, err = client.StreamDERPMaps(context.Background(), &proto.StreamDERPMapsRequest{})
-	if !assert.NoError(p.t, err) {
+	if err != nil {
 		_ = c.Close()
 		return tailnet.ControlProtocolClients{}, err
 	}
@@ -1239,6 +1244,11 @@ func (p *pipeDialer) Dial(_ context.Context, _ tailnet.ResumeTokenController) (t
 		Telemetry:   client,
 	}, nil
 }
+
+// timeoutOnFakeErr is the error we send when fakes fail to send calls or receive responses before
+// their context times out. We don't want to send the context error since that often doesn't trigger
+// test failures or logging.
+var timeoutOnFakeErr = xerrors.New("test timeout")
 
 type fakeCoordinatorClient struct {
 	ctx   context.Context
@@ -1253,15 +1263,13 @@ func (f fakeCoordinatorClient) Close() error {
 	errs := make(chan error)
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send close call")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case f.close <- errs:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for close call response")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case err := <-errs:
 		return err
 	}
@@ -1276,15 +1284,13 @@ func (f fakeCoordinatorClient) Send(request *proto.CoordinateRequest) error {
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send call")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case f.reqs <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for send call response")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case err := <-errs:
 		return err
 	}
@@ -1300,15 +1306,13 @@ func (f fakeCoordinatorClient) Recv() (*proto.CoordinateResponse, error) {
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send Recv() call")
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case f.resps <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for Recv() call response")
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case err := <-errs:
 		return nil, err
 	case resp := <-resps:
@@ -1348,15 +1352,13 @@ func (f *fakeWorkspaceUpdateClient) Close() error {
 	errs := make(chan error)
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send close call")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case f.close <- errs:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for close call response")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case err := <-errs:
 		return err
 	}
@@ -1372,15 +1374,13 @@ func (f *fakeWorkspaceUpdateClient) Recv() (*proto.WorkspaceUpdate, error) {
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send Recv() call")
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case f.recv <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for Recv() call response")
-		return nil, f.ctx.Err()
+		return nil, timeoutOnFakeErr
 	case err := <-errs:
 		return nil, err
 	case resp := <-resps:
@@ -1440,28 +1440,51 @@ func (f *fakeDNSSetter) SetDNSHosts(hosts map[dnsname.FQDN][]netip.Addr) error {
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send SetDNSHosts() call")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case f.calls <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting for SetDNSHosts() call response")
-		return f.ctx.Err()
+		return timeoutOnFakeErr
 	case err := <-errs:
 		return err
 	}
 }
 
+func newFakeUpdateHandler(ctx context.Context, t testing.TB) *fakeUpdateHandler {
+	return &fakeUpdateHandler{
+		ctx: ctx,
+		t:   t,
+		ch:  make(chan tailnet.WorkspaceUpdate),
+	}
+}
+
+type fakeUpdateHandler struct {
+	ctx context.Context
+	t   testing.TB
+	ch  chan tailnet.WorkspaceUpdate
+}
+
+func (f *fakeUpdateHandler) Update(wu tailnet.WorkspaceUpdate) error {
+	f.t.Helper()
+	select {
+	case <-f.ctx.Done():
+		return timeoutOnFakeErr
+	case f.ch <- wu:
+		// OK
+	}
+	return nil
+}
+
 func setupConnectedAllWorkspaceUpdatesController(
-	ctx context.Context, t testing.TB, logger slog.Logger, dnsSetter tailnet.DNSHostsSetter,
+	ctx context.Context, t testing.TB, logger slog.Logger, opts ...tailnet.TunnelAllOption,
 ) (
-	*fakeCoordinatorClient, *fakeWorkspaceUpdateClient,
+	*fakeCoordinatorClient, *fakeWorkspaceUpdateClient, *tailnet.TunnelAllWorkspaceUpdatesController,
 ) {
 	fConn := &fakeCoordinatee{}
 	tsc := tailnet.NewTunnelSrcCoordController(logger, fConn)
-	uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc, dnsSetter)
+	uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc, opts...)
 
 	// connect up a coordinator client, to track adding and removing tunnels
 	coordC := newFakeCoordinatorClient(ctx, t)
@@ -1487,16 +1510,20 @@ func setupConnectedAllWorkspaceUpdatesController(
 		err := testutil.RequireRecvCtx(ctx, t, updateCW.Wait())
 		require.ErrorIs(t, err, io.EOF)
 	})
-	return coordC, updateC
+	return coordC, updateC, uut
 }
 
 func TestTunnelAllWorkspaceUpdatesController_Initial(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
+	fUH := newFakeUpdateHandler(ctx, t)
 	fDNS := newFakeDNSSetter(ctx, t)
-	coordC, updateC := setupConnectedAllWorkspaceUpdatesController(ctx, t, logger, fDNS)
+	coordC, updateC, updateCtrl := setupConnectedAllWorkspaceUpdatesController(ctx, t, logger,
+		tailnet.WithDNS(fDNS, "testy"),
+		tailnet.WithHandler(fUH),
+	)
 
 	// Initial update contains 2 workspaces with 1 & 2 agents, respectively
 	w1ID := testUUID(1)
@@ -1530,28 +1557,91 @@ func TestTunnelAllWorkspaceUpdatesController_Initial(t *testing.T) {
 	require.Contains(t, adds, w2a1ID)
 	require.Contains(t, adds, w2a2ID)
 
+	ws1a1IP := netip.MustParseAddr("fd60:627a:a42b:0101::")
+	w2a1IP := netip.MustParseAddr("fd60:627a:a42b:0201::")
+	w2a2IP := netip.MustParseAddr("fd60:627a:a42b:0202::")
+
 	// Also triggers setting DNS hosts
 	expectedDNS := map[dnsname.FQDN][]netip.Addr{
-		"w1a1.w1.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0101::")},
-		"w2a1.w2.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0201::")},
-		"w2a2.w2.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0202::")},
+		"w1a1.w1.me.coder.":    {ws1a1IP},
+		"w2a1.w2.me.coder.":    {w2a1IP},
+		"w2a2.w2.me.coder.":    {w2a2IP},
+		"w1a1.w1.testy.coder.": {ws1a1IP},
+		"w2a1.w2.testy.coder.": {w2a1IP},
+		"w2a2.w2.testy.coder.": {w2a2IP},
+		"w1.coder.":            {ws1a1IP},
 	}
 	dnsCall := testutil.RequireRecvCtx(ctx, t, fDNS.calls)
 	require.Equal(t, expectedDNS, dnsCall.hosts)
 	testutil.RequireSendCtx(ctx, t, dnsCall.err, nil)
+
+	currentState := tailnet.WorkspaceUpdate{
+		UpsertedWorkspaces: []*tailnet.Workspace{
+			{ID: w1ID, Name: "w1"},
+			{ID: w2ID, Name: "w2"},
+		},
+		UpsertedAgents: []*tailnet.Agent{
+			{
+				ID: w1a1ID, Name: "w1a1", WorkspaceID: w1ID,
+				Hosts: map[dnsname.FQDN][]netip.Addr{
+					"w1.coder.":            {ws1a1IP},
+					"w1a1.w1.me.coder.":    {ws1a1IP},
+					"w1a1.w1.testy.coder.": {ws1a1IP},
+				},
+			},
+			{
+				ID: w2a1ID, Name: "w2a1", WorkspaceID: w2ID,
+				Hosts: map[dnsname.FQDN][]netip.Addr{
+					"w2a1.w2.me.coder.":    {w2a1IP},
+					"w2a1.w2.testy.coder.": {w2a1IP},
+				},
+			},
+			{
+				ID: w2a2ID, Name: "w2a2", WorkspaceID: w2ID,
+				Hosts: map[dnsname.FQDN][]netip.Addr{
+					"w2a2.w2.me.coder.":    {w2a2IP},
+					"w2a2.w2.testy.coder.": {w2a2IP},
+				},
+			},
+		},
+		DeletedWorkspaces: []*tailnet.Workspace{},
+		DeletedAgents:     []*tailnet.Agent{},
+	}
+
+	// And the callback
+	cbUpdate := testutil.RequireRecvCtx(ctx, t, fUH.ch)
+	require.Equal(t, currentState, cbUpdate)
+
+	// Current recvState should match
+	recvState, err := updateCtrl.CurrentState()
+	require.NoError(t, err)
+	slices.SortFunc(recvState.UpsertedWorkspaces, func(a, b *tailnet.Workspace) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	slices.SortFunc(recvState.UpsertedAgents, func(a, b *tailnet.Agent) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	require.Equal(t, currentState, recvState)
 }
 
 func TestTunnelAllWorkspaceUpdatesController_DeleteAgent(t *testing.T) {
 	t.Parallel()
 	ctx := testutil.Context(t, testutil.WaitShort)
-	logger := slogtest.Make(t, nil).Leveled(slog.LevelDebug)
+	logger := testutil.Logger(t)
 
+	fUH := newFakeUpdateHandler(ctx, t)
 	fDNS := newFakeDNSSetter(ctx, t)
-	coordC, updateC := setupConnectedAllWorkspaceUpdatesController(ctx, t, logger, fDNS)
+	coordC, updateC, updateCtrl := setupConnectedAllWorkspaceUpdatesController(ctx, t, logger,
+		tailnet.WithDNS(fDNS, "testy"),
+		tailnet.WithHandler(fUH),
+	)
 
 	w1ID := testUUID(1)
 	w1a1ID := testUUID(1, 1)
 	w1a2ID := testUUID(1, 2)
+	ws1a1IP := netip.MustParseAddr("fd60:627a:a42b:0101::")
+	ws1a2IP := netip.MustParseAddr("fd60:627a:a42b:0102::")
+
 	initUp := &proto.WorkspaceUpdate{
 		UpsertedWorkspaces: []*proto.Workspace{
 			{Id: w1ID[:], Name: "w1"},
@@ -1571,11 +1661,36 @@ func TestTunnelAllWorkspaceUpdatesController_DeleteAgent(t *testing.T) {
 
 	// DNS for w1a1
 	expectedDNS := map[dnsname.FQDN][]netip.Addr{
-		"w1a1.w1.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0101::")},
+		"w1a1.w1.testy.coder.": {ws1a1IP},
+		"w1a1.w1.me.coder.":    {ws1a1IP},
+		"w1.coder.":            {ws1a1IP},
 	}
 	dnsCall := testutil.RequireRecvCtx(ctx, t, fDNS.calls)
 	require.Equal(t, expectedDNS, dnsCall.hosts)
 	testutil.RequireSendCtx(ctx, t, dnsCall.err, nil)
+
+	initRecvUp := tailnet.WorkspaceUpdate{
+		UpsertedWorkspaces: []*tailnet.Workspace{
+			{ID: w1ID, Name: "w1"},
+		},
+		UpsertedAgents: []*tailnet.Agent{
+			{ID: w1a1ID, Name: "w1a1", WorkspaceID: w1ID, Hosts: map[dnsname.FQDN][]netip.Addr{
+				"w1a1.w1.testy.coder.": {ws1a1IP},
+				"w1a1.w1.me.coder.":    {ws1a1IP},
+				"w1.coder.":            {ws1a1IP},
+			}},
+		},
+		DeletedWorkspaces: []*tailnet.Workspace{},
+		DeletedAgents:     []*tailnet.Agent{},
+	}
+
+	cbUpdate := testutil.RequireRecvCtx(ctx, t, fUH.ch)
+	require.Equal(t, initRecvUp, cbUpdate)
+
+	// Current state should match initial
+	state, err := updateCtrl.CurrentState()
+	require.NoError(t, err)
+	require.Equal(t, initRecvUp, state)
 
 	// Send update that removes w1a1 and adds w1a2
 	agentUpdate := &proto.WorkspaceUpdate{
@@ -1601,11 +1716,51 @@ func TestTunnelAllWorkspaceUpdatesController_DeleteAgent(t *testing.T) {
 
 	// DNS contains only w1a2
 	expectedDNS = map[dnsname.FQDN][]netip.Addr{
-		"w1a2.w1.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0102::")},
+		"w1a2.w1.testy.coder.": {ws1a2IP},
+		"w1a2.w1.me.coder.":    {ws1a2IP},
+		"w1.coder.":            {ws1a2IP},
 	}
 	dnsCall = testutil.RequireRecvCtx(ctx, t, fDNS.calls)
 	require.Equal(t, expectedDNS, dnsCall.hosts)
 	testutil.RequireSendCtx(ctx, t, dnsCall.err, nil)
+
+	cbUpdate = testutil.RequireRecvCtx(ctx, t, fUH.ch)
+	sndRecvUpdate := tailnet.WorkspaceUpdate{
+		UpsertedWorkspaces: []*tailnet.Workspace{},
+		UpsertedAgents: []*tailnet.Agent{
+			{ID: w1a2ID, Name: "w1a2", WorkspaceID: w1ID, Hosts: map[dnsname.FQDN][]netip.Addr{
+				"w1a2.w1.testy.coder.": {ws1a2IP},
+				"w1a2.w1.me.coder.":    {ws1a2IP},
+				"w1.coder.":            {ws1a2IP},
+			}},
+		},
+		DeletedWorkspaces: []*tailnet.Workspace{},
+		DeletedAgents: []*tailnet.Agent{
+			{ID: w1a1ID, Name: "w1a1", WorkspaceID: w1ID, Hosts: map[dnsname.FQDN][]netip.Addr{
+				"w1a1.w1.testy.coder.": {ws1a1IP},
+				"w1a1.w1.me.coder.":    {ws1a1IP},
+				"w1.coder.":            {ws1a1IP},
+			}},
+		},
+	}
+	require.Equal(t, sndRecvUpdate, cbUpdate)
+
+	state, err = updateCtrl.CurrentState()
+	require.NoError(t, err)
+	require.Equal(t, tailnet.WorkspaceUpdate{
+		UpsertedWorkspaces: []*tailnet.Workspace{
+			{ID: w1ID, Name: "w1"},
+		},
+		UpsertedAgents: []*tailnet.Agent{
+			{ID: w1a2ID, Name: "w1a2", WorkspaceID: w1ID, Hosts: map[dnsname.FQDN][]netip.Addr{
+				"w1a2.w1.testy.coder.": {ws1a2IP},
+				"w1a2.w1.me.coder.":    {ws1a2IP},
+				"w1.coder.":            {ws1a2IP},
+			}},
+		},
+		DeletedWorkspaces: []*tailnet.Workspace{},
+		DeletedAgents:     []*tailnet.Agent{},
+	}, state)
 }
 
 func TestTunnelAllWorkspaceUpdatesController_DNSError(t *testing.T) {
@@ -1619,13 +1774,17 @@ func TestTunnelAllWorkspaceUpdatesController_DNSError(t *testing.T) {
 	fDNS := newFakeDNSSetter(ctx, t)
 	fConn := &fakeCoordinatee{}
 	tsc := tailnet.NewTunnelSrcCoordController(logger, fConn)
-	uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc, fDNS)
+	uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc,
+		tailnet.WithDNS(fDNS, "testy"),
+	)
 
 	updateC := newFakeWorkspaceUpdateClient(ctx, t)
 	updateCW := uut.New(updateC)
 
 	w1ID := testUUID(1)
 	w1a1ID := testUUID(1, 1)
+	ws1a1IP := netip.MustParseAddr("fd60:627a:a42b:0101::")
+
 	initUp := &proto.WorkspaceUpdate{
 		UpsertedWorkspaces: []*proto.Workspace{
 			{Id: w1ID[:], Name: "w1"},
@@ -1639,7 +1798,9 @@ func TestTunnelAllWorkspaceUpdatesController_DNSError(t *testing.T) {
 
 	// DNS for w1a1
 	expectedDNS := map[dnsname.FQDN][]netip.Addr{
-		"w1a1.w1.me.coder.": {netip.MustParseAddr("fd60:627a:a42b:0101::")},
+		"w1a1.w1.me.coder.":    {ws1a1IP},
+		"w1a1.w1.testy.coder.": {ws1a1IP},
+		"w1.coder.":            {ws1a1IP},
 	}
 	dnsCall := testutil.RequireRecvCtx(ctx, t, fDNS.calls)
 	require.Equal(t, expectedDNS, dnsCall.hosts)
@@ -1746,7 +1907,7 @@ func TestTunnelAllWorkspaceUpdatesController_HandleErrors(t *testing.T) {
 
 			fConn := &fakeCoordinatee{}
 			tsc := tailnet.NewTunnelSrcCoordController(logger, fConn)
-			uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc, nil)
+			uut := tailnet.NewTunnelAllWorkspaceUpdatesController(logger, tsc)
 			updateC := newFakeWorkspaceUpdateClient(ctx, t)
 			updateCW := uut.New(updateC)
 
@@ -1767,6 +1928,10 @@ type fakeWorkspaceUpdatesController struct {
 	calls chan *newWorkspaceUpdatesCall
 }
 
+func (*fakeWorkspaceUpdatesController) CurrentState() *proto.WorkspaceUpdate {
+	panic("unimplemented")
+}
+
 type newWorkspaceUpdatesCall struct {
 	client tailnet.WorkspaceUpdatesClient
 	resp   chan<- tailnet.CloserWaiter
@@ -1780,18 +1945,16 @@ func (f fakeWorkspaceUpdatesController) New(client tailnet.WorkspaceUpdatesClien
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to send New call")
 		cw := newFakeCloserWaiter()
-		cw.errCh <- f.ctx.Err()
+		cw.errCh <- timeoutOnFakeErr
 		return cw
 	case f.calls <- call:
 		// OK
 	}
 	select {
 	case <-f.ctx.Done():
-		f.t.Error("timed out waiting to get New call response")
 		cw := newFakeCloserWaiter()
-		cw.errCh <- f.ctx.Err()
+		cw.errCh <- timeoutOnFakeErr
 		return cw
 	case resp := <-resps:
 		return resp

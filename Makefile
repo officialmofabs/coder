@@ -79,8 +79,12 @@ PACKAGE_OS_ARCHES := linux_amd64 linux_armv7 linux_arm64
 # All architectures we build Docker images for (Linux only).
 DOCKER_ARCHES := amd64 arm64 armv7
 
+# All ${OS}_${ARCH} combos we build the desktop dylib for.
+DYLIB_ARCHES := darwin_amd64 darwin_arm64
+
 # Computed variables based on the above.
 CODER_SLIM_BINARIES      := $(addprefix build/coder-slim_$(VERSION)_,$(OS_ARCHES))
+CODER_DYLIBS             := $(foreach os_arch, $(DYLIB_ARCHES), build/coder-vpn_$(VERSION)_$(os_arch).dylib)
 CODER_FAT_BINARIES       := $(addprefix build/coder_$(VERSION)_,$(OS_ARCHES))
 CODER_ALL_BINARIES       := $(CODER_SLIM_BINARIES) $(CODER_FAT_BINARIES)
 CODER_TAR_GZ_ARCHIVES    := $(foreach os_arch, $(ARCHIVE_TAR_GZ), build/coder_$(VERSION)_$(os_arch).tar.gz)
@@ -237,6 +241,25 @@ $(CODER_ALL_BINARIES): go.mod go.sum \
 
 		cp "$@" "./site/out/bin/coder-$$os-$$arch$$dot_ext"
 	fi
+
+# This task builds Coder Desktop dylibs
+$(CODER_DYLIBS): go.mod go.sum $(GO_SRC_FILES)
+	@if [ "$(shell uname)" = "Darwin" ]; then
+		$(get-mode-os-arch-ext)
+		./scripts/build_go.sh \
+			--os "$$os" \
+			--arch "$$arch" \
+			--version "$(VERSION)" \
+			--output "$@" \
+			--dylib
+
+	else
+		echo "ERROR: Can't build dylib on non-Darwin OS" 1>&2
+		exit 1
+	fi
+
+# This task builds both dylibs
+build/coder-dylib: $(CODER_DYLIBS)
 
 # This task builds all archives. It parses the target name to get the metadata
 # for the build, so it must be specified in this format:
@@ -617,8 +640,8 @@ vpn/vpn.pb.go: vpn/vpn.proto
 		./vpn/vpn.proto
 
 site/src/api/typesGenerated.ts: $(wildcard scripts/apitypings/*) $(shell find ./codersdk $(FIND_EXCLUSIONS) -type f -name '*.go')
-	go run ./scripts/apitypings/ > $@
-	./scripts/pnpm_install.sh
+	# -C sets the directory for the go run command
+	go run -C ./scripts/apitypings main.go > $@
 
 site/e2e/provisionerGenerated.ts: provisionerd/proto/provisionerd.pb.go provisionersdk/proto/provisioner.pb.go
 	cd site
@@ -634,7 +657,10 @@ examples/examples.gen.json: scripts/examplegen/main.go examples/examples.go $(sh
 	go run ./scripts/examplegen/main.go > examples/examples.gen.json
 
 coderd/rbac/object_gen.go: scripts/typegen/rbacobject.gotmpl scripts/typegen/main.go coderd/rbac/object.go coderd/rbac/policy/policy.go
-	go run scripts/typegen/main.go rbac object > coderd/rbac/object_gen.go
+	tempdir=$(shell mktemp -d /tmp/typegen_rbac_object.XXXXXX)
+	go run ./scripts/typegen/main.go rbac object > "$$tempdir/object_gen.go"
+	mv -v "$$tempdir/object_gen.go" coderd/rbac/object_gen.go
+	rmdir -v "$$tempdir"
 
 codersdk/rbacresources_gen.go: scripts/typegen/codersdk.gotmpl scripts/typegen/main.go coderd/rbac/object.go coderd/rbac/policy/policy.go
 	# Do no overwrite codersdk/rbacresources_gen.go directly, as it would make the file empty, breaking

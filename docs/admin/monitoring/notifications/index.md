@@ -74,12 +74,12 @@ flags.
 Notifications can currently be delivered by either SMTP or webhook. Each message
 can only be delivered to one method, and this method is configured globally with
 [`CODER_NOTIFICATIONS_METHOD`](../../../reference/cli/server.md#--notifications-method)
-(default: `smtp`).
+(default: `smtp`). When there are no delivery methods configured, notifications
+will be disabled.
 
 Premium customers can configure which method to use for each of the supported
-[Events](#workspace-events); see the
-[Preferences](#delivery-preferences-enterprise-premium) section below for more
-details.
+[Events](#workspace-events); see the [Preferences](#delivery-preferences)
+section below for more details.
 
 ## SMTP (Email)
 
@@ -89,11 +89,11 @@ existing one.
 
 **Server Settings:**
 
-| Required | CLI                 | Env                     | Type        | Description                               | Default       |
-| :------: | ------------------- | ----------------------- | ----------- | ----------------------------------------- | ------------- |
-|    ✔️    | `--email-from`      | `CODER_EMAIL_FROM`      | `string`    | The sender's address to use.              |               |
-|    ✔️    | `--email-smarthost` | `CODER_EMAIL_SMARTHOST` | `host:port` | The SMTP relay to send messages through.  | localhost:587 |
-|    ✔️    | `--email-hello`     | `CODER_EMAIL_HELLO`     | `string`    | The hostname identifying the SMTP server. | localhost     |
+| Required | CLI                 | Env                     | Type     | Description                               | Default   |
+| :------: | ------------------- | ----------------------- | -------- | ----------------------------------------- | --------- |
+|    ✔️    | `--email-from`      | `CODER_EMAIL_FROM`      | `string` | The sender's address to use.              |           |
+|    ✔️    | `--email-smarthost` | `CODER_EMAIL_SMARTHOST` | `string` | The SMTP relay to send messages           |
+|    ✔️    | `--email-hello`     | `CODER_EMAIL_HELLO`     | `string` | The hostname identifying the SMTP server. | localhost |
 
 **Authentication Settings:**
 
@@ -231,7 +231,14 @@ notification is indicated on the right hand side of this table.
 
 ![User Notification Preferences](../../../images/admin/monitoring/notifications/user-notification-preferences.png)
 
-## Delivery Preferences (enterprise) (premium)
+## Delivery Preferences
+
+<blockquote class="info">
+
+Delivery preferences is an Enterprise and Premium feature.
+[Learn more](https://coder.com/pricing#compare-plans).
+
+</blockquote>
 
 Administrators can configure which delivery methods are used for each different
 [event type](#event-types).
