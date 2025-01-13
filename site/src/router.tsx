@@ -1,3 +1,4 @@
+import { GlobalErrorBoundary } from "components/ErrorBoundary/GlobalErrorBoundary";
 import { TemplateRedirectController } from "pages/TemplatePage/TemplateRedirectController";
 import { Suspense, lazy } from "react";
 import {
@@ -35,6 +36,9 @@ const DeploymentSettingsProvider = lazy(
 );
 const OrganizationSettingsLayout = lazy(
 	() => import("./modules/management/OrganizationSettingsLayout"),
+);
+const OrganizationSidebarLayout = lazy(
+	() => import("./modules/management/OrganizationSidebarLayout"),
 );
 const CliAuthenticationPage = lazy(
 	() => import("./pages/CliAuthPage/CliAuthPage"),
@@ -365,7 +369,10 @@ const groupsRouter = () => {
 
 export const router = createBrowserRouter(
 	createRoutesFromChildren(
-		<Route element={<RoutesWithSuspense />}>
+		<Route
+			element={<RoutesWithSuspense />}
+			errorElement={<GlobalErrorBoundary />}
+		>
 			<Route path="login" element={<LoginPage />} />
 			<Route path="setup" element={<SetupPage />} />
 			<Route path="reset-password">
@@ -423,9 +430,8 @@ export const router = createBrowserRouter(
 						{/* General settings for the default org can omit the organization name */}
 						<Route index element={<OrganizationSettingsPage />} />
 
-						<Route path=":organization">
-							<Route index element={<OrganizationSettingsPage />} />
-							<Route path="members" element={<OrganizationMembersPage />} />
+						<Route path=":organization" element={<OrganizationSidebarLayout />}>
+							<Route index element={<OrganizationMembersPage />} />
 							{groupsRouter()}
 							<Route path="roles">
 								<Route index element={<OrganizationCustomRolesPage />} />
@@ -437,6 +443,7 @@ export const router = createBrowserRouter(
 								element={<OrganizationProvisionersPage />}
 							/>
 							<Route path="idp-sync" element={<OrganizationIdPSyncPage />} />
+							<Route path="settings" element={<OrganizationSettingsPage />} />
 						</Route>
 					</Route>
 

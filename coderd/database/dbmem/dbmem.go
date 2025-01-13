@@ -2206,6 +2206,11 @@ func (q *FakeQuerier) DeleteWorkspaceAgentPortSharesByTemplate(_ context.Context
 	return nil
 }
 
+func (*FakeQuerier) DisableForeignKeysAndTriggers(_ context.Context) error {
+	// This is a no-op in the in-memory database.
+	return nil
+}
+
 func (q *FakeQuerier) EnqueueNotificationMessage(_ context.Context, arg database.EnqueueNotificationMessageParams) error {
 	err := validateDatabaseType(arg)
 	if err != nil {
@@ -8348,6 +8353,10 @@ func (q *FakeQuerier) InsertWorkspaceApp(_ context.Context, arg database.InsertW
 		arg.SharingLevel = database.AppSharingLevelOwner
 	}
 
+	if arg.OpenIn == "" {
+		arg.OpenIn = database.WorkspaceAppOpenInSlimWindow
+	}
+
 	// nolint:gosimple
 	workspaceApp := database.WorkspaceApp{
 		ID:                   arg.ID,
@@ -8367,6 +8376,7 @@ func (q *FakeQuerier) InsertWorkspaceApp(_ context.Context, arg database.InsertW
 		Health:               arg.Health,
 		Hidden:               arg.Hidden,
 		DisplayOrder:         arg.DisplayOrder,
+		OpenIn:               arg.OpenIn,
 	}
 	q.workspaceApps = append(q.workspaceApps, workspaceApp)
 	return workspaceApp, nil
