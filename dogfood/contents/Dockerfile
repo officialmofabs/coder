@@ -104,7 +104,13 @@ ARG DEBIAN_FRONTEND="noninteractive"
 # Updated certificates are necessary to use the teraswitch mirror.
 # This must be ran before copying in configuration since the config replaces
 # the default mirror with teraswitch.
-RUN apt-get update && apt-get install --yes ca-certificates
+# Also enable the en_US.UTF-8 locale so that we don't generate multiple locales
+# and unminimize to include man pages.
+RUN apt-get update && \
+	apt-get install --yes ca-certificates locales && \
+	echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && \
+	locale-gen && \
+	yes | unminimize
 
 COPY files /
 
@@ -214,7 +220,15 @@ RUN GH_CLI_VERSION=$(curl -s "https://api.github.com/repos/cli/cli/releases/late
 # See https://github.com/jesseduffield/lazygit#ubuntu
 RUN LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep '"tag_name":' |  sed -E 's/.*"v*([^"]+)".*/\1/') && \
 	curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" && \
-	tar xf lazygit.tar.gz -C /usr/local/bin lazygit
+	tar xf lazygit.tar.gz -C /usr/local/bin lazygit && \
+	rm lazygit.tar.gz
+
+# Install doctl
+# See https://docs.digitalocean.com/reference/doctl/how-to/install
+RUN DOCTL_VERSION=$(curl -s "https://api.github.com/repos/digitalocean/doctl/releases/latest" | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') && \
+	curl -L https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz -o doctl.tar.gz && \
+	tar xf doctl.tar.gz -C /usr/local/bin doctl && \
+	rm doctl.tar.gz
 
 # Install frontend utilities
 ENV NVM_DIR=/usr/local/nvm
