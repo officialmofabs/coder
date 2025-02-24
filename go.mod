@@ -148,7 +148,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c
 	github.com/moby/moby v27.5.0+incompatible
 	github.com/mocktools/go-smtp-mock/v2 v2.4.0
-	github.com/muesli/termenv v0.15.3-0.20240618155329-98d742f6907a
+	github.com/muesli/termenv v0.16.0
 	github.com/natefinch/atomic v1.0.1
 	github.com/open-policy-agent/opa v1.0.0
 	github.com/ory/dockertest/v3 v3.11.0
@@ -191,7 +191,7 @@ require (
 	golang.org/x/net v0.34.0
 	golang.org/x/oauth2 v0.25.0
 	golang.org/x/sync v0.10.0
-	golang.org/x/sys v0.29.1-0.20250107080300-1c14dcadc3ab
+	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.28.0
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/tools v0.29.0
