@@ -18,7 +18,8 @@ networking logic.
 
 In order for clients and workspaces to be able to connect:
 
-> **Note:** We strongly recommend that clients connect to Coder and their
+> [!NOTE]
+> We strongly recommend that clients connect to Coder and their
 > workspaces over a good quality, broadband network connection. The following
 > are minimum requirements:
 >
@@ -31,17 +32,10 @@ In order for clients and workspaces to be able to connect:
 - Any reverse proxy or ingress between the Coder control plane and
   clients/agents must support WebSockets.
 
-> **Note:** We strongly recommend that clients connect to Coder and their
-> workspaces over a good quality, broadband network connection. The following
-> are minimum requirements:
->
-> - better than 400ms round-trip latency to the Coder server and to their
->   workspace
-> - better than 0.5% random packet loss
-
 In order for clients to be able to establish direct connections:
 
-> **Note:** Direct connections via the web browser are not supported. To improve
+> [!NOTE]
+> Direct connections via the web browser are not supported. To improve
 > latency for browser-based applications running inside Coder workspaces in
 > regions far from the Coder control plane, consider deploying one or more
 > [workspace proxies](./workspace-proxies.md).
@@ -84,7 +78,7 @@ as well. There must not be a NAT between users and the coder server.
 
 Template admins can overwrite the site-wide access URL at the template level by
 leveraging the `url` argument when
-[defining the Coder provider](https://registry.terraform.io/providers/coder/coder/latest/docs#url):
+[defining the Coder provider](https://registry.terraform.io/providers/coder/coder/latest/docs#url-1):
 
 ```terraform
 provider "coder" {
@@ -180,12 +174,9 @@ more.
 
 ## Browser-only connections
 
-<blockquote class="info">
-
-Browser-only connections is an Enterprise and Premium feature.
-[Learn more](https://coder.com/pricing#compare-plans).
-
-</blockquote>
+> [!NOTE]
+> Browser-only connections is an Enterprise and Premium feature.
+> [Learn more](https://coder.com/pricing#compare-plans).
 
 Some Coder deployments require that all access is through the browser to comply
 with security policies. In these cases, pass the `--browser-only` flag to
@@ -197,12 +188,9 @@ via the web terminal and
 
 ### Workspace Proxies
 
-<blockquote class="info">
-
-Workspace proxies are an Enterprise and Premium feature.
-[Learn more](https://coder.com/pricing#compare-plans).
-
-</blockquote>
+> [!NOTE]
+> Workspace proxies are an Enterprise and Premium feature.
+> [Learn more](https://coder.com/pricing#compare-plans).
 
 Workspace proxies are a Coder Enterprise feature that allows you to provide
 low-latency browser experiences for geo-distributed teams.

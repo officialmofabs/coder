@@ -5,9 +5,11 @@ import {
 } from "api/api";
 import type { FieldError } from "api/errors";
 import type * as TypesGen from "api/typesGenerated";
-import type { Permissions } from "contexts/auth/permissions";
 import type { ProxyLatencyReport } from "contexts/useProxyLatency";
 import range from "lodash/range";
+import type { Notification } from "modules/notifications/NotificationsInbox/types";
+import type { Permissions } from "modules/permissions";
+import type { OrganizationPermissions } from "modules/permissions/organizations";
 import type { FileTree } from "utils/filetree";
 import type { TemplateVersionFiles } from "utils/templateVersion";
 
@@ -246,6 +248,11 @@ export const MockSupportLinks: TypesGen.LinkConfig[] = [
 			"https://github.com/coder/coder/issues/new?labels=needs+grooming&body={CODER_BUILD_INFO}",
 		icon: "",
 	},
+	{
+		name: "Fourth link",
+		target: "/icons",
+		icon: "",
+	},
 ];
 
 export const MockUpdateCheck: TypesGen.UpdateCheckResponse = {
@@ -284,6 +291,15 @@ export const MockTemplateAdminRole: TypesGen.Role = {
 export const MockAuditorRole: TypesGen.Role = {
 	name: "auditor",
 	display_name: "Auditor",
+	site_permissions: [],
+	organization_permissions: [],
+	user_permissions: [],
+	organization_id: "",
+};
+
+export const MockWorkspaceCreationBanRole: TypesGen.Role = {
+	name: "organization-workspace-creation-ban",
+	display_name: "Organization Workspace Creation Ban",
 	site_permissions: [],
 	organization_permissions: [],
 	user_permissions: [],
@@ -453,10 +469,15 @@ export function assignableRole(
 	};
 }
 
-export const MockSiteRoles = [MockUserAdminRole, MockAuditorRole];
+export const MockSiteRoles = [
+	MockUserAdminRole,
+	MockAuditorRole,
+	MockWorkspaceCreationBanRole,
+];
 export const MockAssignableSiteRoles = [
 	assignableRole(MockUserAdminRole, true),
 	assignableRole(MockAuditorRole, true),
+	assignableRole(MockWorkspaceCreationBanRole, true),
 ];
 
 export const MockMemberPermissions = {
@@ -475,7 +496,6 @@ export const MockUser: TypesGen.User = {
 	avatar_url: "https://avatars.githubusercontent.com/u/95932066?s=200&v=4",
 	last_seen_at: "",
 	login_type: "password",
-	theme_preference: "",
 	name: "",
 };
 
@@ -496,7 +516,6 @@ export const MockUser2: TypesGen.User = {
 	avatar_url: "",
 	last_seen_at: "2022-09-14T19:12:21Z",
 	login_type: "oidc",
-	theme_preference: "",
 	name: "Mock User The Second",
 };
 
@@ -512,8 +531,11 @@ export const SuspendedMockUser: TypesGen.User = {
 	avatar_url: "",
 	last_seen_at: "",
 	login_type: "password",
-	theme_preference: "",
 	name: "",
+};
+
+export const MockUserAppearanceSettings: TypesGen.UserAppearanceSettings = {
+	theme_preference: "dark",
 };
 
 export const MockOrganizationMember: TypesGen.OrganizationMemberWithUserData = {
@@ -660,6 +682,15 @@ export const MockProvisionerJob: TypesGen.ProvisionerJob = {
 	},
 	organization_id: MockOrganization.id,
 	type: "template_version_dry_run",
+	metadata: {
+		workspace_id: "test-workspace",
+		template_display_name: "Test Template",
+		template_icon: "/icon/code.svg",
+		template_id: "test-template",
+		template_name: "test-template",
+		template_version_name: "test-version",
+		workspace_name: "test-workspace",
+	},
 };
 
 export const MockFailedProvisionerJob: TypesGen.ProvisionerJob = {
@@ -1669,20 +1700,20 @@ export const MockUserAgent = {
 
 export const MockAuthMethodsPasswordOnly: TypesGen.AuthMethods = {
 	password: { enabled: true },
-	github: { enabled: false },
+	github: { enabled: false, default_provider_configured: true },
 	oidc: { enabled: false, signInText: "", iconUrl: "" },
 };
 
 export const MockAuthMethodsPasswordTermsOfService: TypesGen.AuthMethods = {
 	terms_of_service_url: "https://www.youtube.com/watch?v=C2f37Vb2NAE",
 	password: { enabled: true },
-	github: { enabled: false },
+	github: { enabled: false, default_provider_configured: true },
 	oidc: { enabled: false, signInText: "", iconUrl: "" },
 };
 
 export const MockAuthMethodsExternal: TypesGen.AuthMethods = {
 	password: { enabled: false },
-	github: { enabled: true },
+	github: { enabled: true, default_provider_configured: true },
 	oidc: {
 		enabled: true,
 		signInText: "Google",
@@ -1692,7 +1723,7 @@ export const MockAuthMethodsExternal: TypesGen.AuthMethods = {
 
 export const MockAuthMethodsAll: TypesGen.AuthMethods = {
 	password: { enabled: true },
-	github: { enabled: true },
+	github: { enabled: true, default_provider_configured: true },
 	oidc: {
 		enabled: true,
 		signInText: "Google",
@@ -2668,14 +2699,14 @@ export const MockGroupSyncSettings: TypesGen.GroupSyncSettings = {
 	auto_create_missing_groups: false,
 };
 
-export const MockLegacyMappingGroupSyncSettings: TypesGen.GroupSyncSettings = {
+export const MockLegacyMappingGroupSyncSettings = {
 	...MockGroupSyncSettings,
 	mapping: {},
 	legacy_group_name_mapping: {
 		"idp-group-1": "fbd2116a-8961-4954-87ae-e4575bd29ce0",
 		"idp-group-2": "13de3eb4-9b4f-49e7-b0f8-0c3728a0d2e2",
 	},
-};
+} satisfies TypesGen.GroupSyncSettings;
 
 export const MockGroupSyncSettings2: TypesGen.GroupSyncSettings = {
 	field: "group-test",
@@ -2717,6 +2748,13 @@ export const MockOrganizationSyncSettings2: TypesGen.OrganizationSyncSettings =
 			"idp-org-1": ["my-organization-id", "my-organization-2-id"],
 			"idp-org-2": ["my-organization-id"],
 		},
+		organization_assign_default: true,
+	};
+
+export const MockOrganizationSyncSettingsEmpty: TypesGen.OrganizationSyncSettings =
+	{
+		field: "",
+		mapping: {},
 		organization_assign_default: true,
 	};
 
@@ -2807,20 +2845,23 @@ export const MockPermissions: Permissions = {
 	viewAllUsers: true,
 	updateUsers: true,
 	viewAnyAuditLog: true,
-	viewDeploymentValues: true,
-	editDeploymentValues: true,
-	viewUpdateCheck: true,
+	viewDeploymentConfig: true,
+	editDeploymentConfig: true,
 	viewDeploymentStats: true,
-	viewExternalAuthConfig: true,
 	readWorkspaceProxies: true,
 	editWorkspaceProxies: true,
 	createOrganization: true,
-	editAnyOrganization: true,
 	viewAnyGroup: true,
 	createGroup: true,
 	viewAllLicenses: true,
 	viewNotificationTemplate: true,
 	viewOrganizationIDPSyncSettings: true,
+	viewDebugInfo: true,
+	assignAnyRoles: true,
+	editAnyGroups: true,
+	editAnySettings: true,
+	viewAnyIdpSyncSettings: true,
+	viewAnyMembers: true,
 };
 
 export const MockNoPermissions: Permissions = {
@@ -2831,20 +2872,59 @@ export const MockNoPermissions: Permissions = {
 	viewAllUsers: false,
 	updateUsers: false,
 	viewAnyAuditLog: false,
-	viewDeploymentValues: false,
-	editDeploymentValues: false,
-	viewUpdateCheck: false,
+	viewDeploymentConfig: false,
+	editDeploymentConfig: false,
 	viewDeploymentStats: false,
-	viewExternalAuthConfig: false,
 	readWorkspaceProxies: false,
 	editWorkspaceProxies: false,
 	createOrganization: false,
-	editAnyOrganization: false,
 	viewAnyGroup: false,
 	createGroup: false,
 	viewAllLicenses: false,
 	viewNotificationTemplate: false,
 	viewOrganizationIDPSyncSettings: false,
+	viewDebugInfo: false,
+	assignAnyRoles: false,
+	editAnyGroups: false,
+	editAnySettings: false,
+	viewAnyIdpSyncSettings: false,
+	viewAnyMembers: false,
+};
+
+export const MockOrganizationPermissions: OrganizationPermissions = {
+	viewMembers: true,
+	editMembers: true,
+	createGroup: true,
+	viewGroups: true,
+	editGroups: true,
+	editSettings: true,
+	viewOrgRoles: true,
+	createOrgRoles: true,
+	assignOrgRoles: true,
+	updateOrgRoles: true,
+	deleteOrgRoles: true,
+	viewProvisioners: true,
+	viewProvisionerJobs: true,
+	viewIdpSyncSettings: true,
+	editIdpSyncSettings: true,
+};
+
+export const MockNoOrganizationPermissions: OrganizationPermissions = {
+	viewMembers: false,
+	editMembers: false,
+	createGroup: false,
+	viewGroups: false,
+	editGroups: false,
+	editSettings: false,
+	viewOrgRoles: false,
+	createOrgRoles: false,
+	assignOrgRoles: false,
+	updateOrgRoles: false,
+	deleteOrgRoles: false,
+	viewProvisioners: false,
+	viewProvisionerJobs: false,
+	viewIdpSyncSettings: false,
+	editIdpSyncSettings: false,
 };
 
 export const MockDeploymentConfig: DeploymentConfig = {
@@ -4164,3 +4244,31 @@ export const MockNotificationTemplates: TypesGen.NotificationTemplate[] = [
 
 export const MockNotificationMethodsResponse: TypesGen.NotificationMethodsResponse =
 	{ available: ["smtp", "webhook"], default: "smtp" };
+
+export const MockNotification: Notification = {
+	id: "1",
+	read_status: "unread",
+	content:
+		"New user account testuser has been created. This new user account was created for Test User by Kira Pilot.",
+	created_at: mockTwoDaysAgo(),
+	actions: [
+		{
+			label: "View template",
+			url: "https://dev.coder.com/templates/coder/coder",
+		},
+	],
+};
+
+export const MockNotifications: Notification[] = [
+	MockNotification,
+	{ ...MockNotification, id: "2", read_status: "unread" },
+	{ ...MockNotification, id: "3", read_status: "read" },
+	{ ...MockNotification, id: "4", read_status: "read" },
+	{ ...MockNotification, id: "5", read_status: "read" },
+];
+
+function mockTwoDaysAgo() {
+	const date = new Date();
+	date.setDate(date.getDate() - 2);
+	return date.toISOString();
+}
