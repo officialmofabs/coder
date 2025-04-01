@@ -913,6 +913,7 @@ export const MockWorkspaceApp: TypesGen.WorkspaceApp = {
 	},
 	hidden: false,
 	open_in: "slim-window",
+	statuses: [],
 };
 
 export const MockWorkspaceAgentLogSource: TypesGen.WorkspaceAgentLogSource = {
@@ -1371,6 +1372,7 @@ export const MockWorkspace: TypesGen.Workspace = {
 		healthy: true,
 		failing_agents: [],
 	},
+	latest_app_status: null,
 	automatic_updates: "never",
 	allow_renames: true,
 	favorite: false,
@@ -4261,7 +4263,7 @@ export const MockNotification: TypesGen.InboxNotification = {
 	template_id: MockTemplate.id,
 	targets: [],
 	title: "User account created",
-	icon: "user",
+	icon: "DEFAULT_ICON_ACCOUNT",
 };
 
 export const MockNotifications: TypesGen.InboxNotification[] = [
