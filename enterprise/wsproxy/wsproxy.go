@@ -32,6 +32,7 @@ import (
 	"github.com/coder/coder/v2/coderd/cryptokeys"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
+	"github.com/coder/coder/v2/coderd/httpmw/loggermw"
 	"github.com/coder/coder/v2/coderd/tracing"
 	"github.com/coder/coder/v2/coderd/workspaceapps"
 	"github.com/coder/coder/v2/codersdk"
@@ -70,7 +71,7 @@ type Options struct {
 	TLSCertificates    []tls.Certificate
 
 	APIRateLimit           int
-	SecureAuthCookie       bool
+	CookieConfig           codersdk.HTTPCookieConfig
 	DisablePathApps        bool
 	DERPEnabled            bool
 	DERPServerRelayAddress string
@@ -310,8 +311,8 @@ func New(ctx context.Context, opts *Options) (*Server, error) {
 			Logger:                   s.Logger.Named("proxy_token_provider"),
 		},
 
-		DisablePathApps:  opts.DisablePathApps,
-		SecureAuthCookie: opts.SecureAuthCookie,
+		DisablePathApps: opts.DisablePathApps,
+		Cookies:         opts.CookieConfig,
 
 		AgentProvider:            agentProvider,
 		StatsCollector:           workspaceapps.NewStatsCollector(opts.StatsCollectorOptions),
@@ -336,7 +337,7 @@ func New(ctx context.Context, opts *Options) (*Server, error) {
 		tracing.Middleware(s.TracerProvider),
 		httpmw.AttachRequestID,
 		httpmw.ExtractRealIP(s.Options.RealIPConfig),
-		httpmw.Logger(s.Logger),
+		loggermw.Logger(s.Logger),
 		prometheusMW,
 		corsMW,
 
@@ -362,7 +363,7 @@ func New(ctx context.Context, opts *Options) (*Server, error) {
 		},
 		// CSRF is required here because we need to set the CSRF cookies on
 		// responses.
-		httpmw.CSRF(s.Options.SecureAuthCookie),
+		httpmw.CSRF(s.Options.CookieConfig),
 	)
 
 	// Attach workspace apps routes.

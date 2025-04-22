@@ -405,6 +405,12 @@ func NewOptions(t testing.TB, options *Options) (func(http.Handler), context.Can
 		workspacestats.TrackerWithTickFlush(options.WorkspaceUsageTrackerTick, options.WorkspaceUsageTrackerFlush),
 	)
 
+	// create the TempDir for the HTTP file cache BEFORE we start the server and set a t.Cleanup to close it. TempDir()
+	// registers a Cleanup function that deletes the directory, and Cleanup functions are called in reverse order. If
+	// we don't do this, then we could try to delete the directory before the HTTP server is done with all files in it,
+	// which on Windows will fail (can't delete files until all programs have closed handles to them).
+	cacheDir := t.TempDir()
+
 	var mutex sync.RWMutex
 	var handler http.Handler
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -415,6 +421,7 @@ func NewOptions(t testing.TB, options *Options) (func(http.Handler), context.Can
 			handler.ServeHTTP(w, r)
 		}
 	}))
+	t.Logf("coderdtest server listening on %s", srv.Listener.Addr().String())
 	srv.Config.BaseContext = func(_ net.Listener) context.Context {
 		return ctx
 	}
@@ -427,7 +434,12 @@ func NewOptions(t testing.TB, options *Options) (func(http.Handler), context.Can
 	} else {
 		srv.Start()
 	}
-	t.Cleanup(srv.Close)
+	t.Logf("coderdtest server started on %s", srv.URL)
+	t.Cleanup(func() {
+		t.Logf("closing coderdtest server on %s", srv.Listener.Addr().String())
+		srv.Close()
+		t.Logf("closed coderdtest server on %s", srv.Listener.Addr().String())
+	})
 
 	tcpAddr, ok := srv.Listener.Addr().(*net.TCPAddr)
 	require.True(t, ok)
@@ -515,7 +527,7 @@ func NewOptions(t testing.TB, options *Options) (func(http.Handler), context.Can
 			AppHostname:                    options.AppHostname,
 			AppHostnameRegex:               appHostnameRegex,
 			Logger:                         *options.Logger,
-			CacheDir:                       t.TempDir(),
+			CacheDir:                       cacheDir,
 			RuntimeConfig:                  runtimeManager,
 			Database:                       options.Database,
 			Pubsub:                         options.Pubsub,

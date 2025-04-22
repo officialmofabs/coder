@@ -33,6 +33,7 @@ import (
 	"github.com/coder/coder/v2/coderd/externalauth"
 	"github.com/coder/coder/v2/coderd/httpapi"
 	"github.com/coder/coder/v2/coderd/httpmw"
+	"github.com/coder/coder/v2/coderd/httpmw/loggermw"
 	"github.com/coder/coder/v2/coderd/jwtutils"
 	"github.com/coder/coder/v2/coderd/rbac"
 	"github.com/coder/coder/v2/coderd/rbac/policy"
@@ -366,11 +367,6 @@ func (api *API) patchWorkspaceAgentAppStatus(rw http.ResponseWriter, r *http.Req
 			String: req.URI,
 			Valid:  req.URI != "",
 		},
-		Icon: sql.NullString{
-			String: req.Icon,
-			Valid:  req.Icon != "",
-		},
-		NeedsUserAttention: req.NeedsUserAttention,
 	})
 	if err != nil {
 		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
@@ -554,6 +550,9 @@ func (api *API) workspaceAgentLogs(rw http.ResponseWriter, r *http.Request) {
 	recheckInterval := time.Minute
 	t := time.NewTicker(recheckInterval)
 	defer t.Stop()
+
+	// Log the request immediately instead of after it completes.
+	loggermw.RequestLoggerFromContext(ctx).WriteLog(ctx, http.StatusAccepted)
 
 	go func() {
 		defer func() {
@@ -879,6 +878,7 @@ func (api *API) workspaceAgentConnection(rw http.ResponseWriter, r *http.Request
 		DERPMap:                  api.DERPMap(),
 		DERPForceWebSockets:      api.DeploymentValues.DERP.Config.ForceWebSockets.Value(),
 		DisableDirectConnections: api.DeploymentValues.DERP.Config.BlockDirect.Value(),
+		HostnameSuffix:           api.DeploymentValues.WorkspaceHostnameSuffix.Value(),
 	})
 }
 
@@ -900,6 +900,7 @@ func (api *API) workspaceAgentConnectionGeneric(rw http.ResponseWriter, r *http.
 		DERPMap:                  api.DERPMap(),
 		DERPForceWebSockets:      api.DeploymentValues.DERP.Config.ForceWebSockets.Value(),
 		DisableDirectConnections: api.DeploymentValues.DERP.Config.BlockDirect.Value(),
+		HostnameSuffix:           api.DeploymentValues.WorkspaceHostnameSuffix.Value(),
 	})
 }
 
@@ -927,6 +928,9 @@ func (api *API) derpMapUpdates(rw http.ResponseWriter, r *http.Request) {
 	}
 	encoder := wsjson.NewEncoder[*tailcfg.DERPMap](ws, websocket.MessageBinary)
 	defer encoder.Close(websocket.StatusGoingAway)
+
+	// Log the request immediately instead of after it completes.
+	loggermw.RequestLoggerFromContext(ctx).WriteLog(ctx, http.StatusAccepted)
 
 	go func(ctx context.Context) {
 		// TODO(mafredri): Is this too frequent? Use separate ping disconnect timeout?
@@ -988,6 +992,16 @@ func (api *API) derpMapUpdates(rw http.ResponseWriter, r *http.Request) {
 // @Router /workspaceagents/{workspaceagent}/coordinate [get]
 func (api *API) workspaceAgentClientCoordinate(rw http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	// Ensure the database is reachable before proceeding.
+	_, err := api.Database.Ping(ctx)
+	if err != nil {
+		httpapi.Write(ctx, rw, http.StatusInternalServerError, codersdk.Response{
+			Message: codersdk.DatabaseNotReachable,
+			Detail:  err.Error(),
+		})
+		return
+	}
 
 	// This route accepts user API key auth and workspace proxy auth. The moon actor has
 	// full permissions so should be able to pass this authz check.
@@ -1314,6 +1328,9 @@ func (api *API) watchWorkspaceAgentMetadata(
 	const sendInterval = time.Second * 1
 	sendTicker := time.NewTicker(sendInterval)
 	defer sendTicker.Stop()
+
+	// Log the request immediately instead of after it completes.
+	loggermw.RequestLoggerFromContext(ctx).WriteLog(ctx, http.StatusAccepted)
 
 	// Send initial metadata.
 	sendMetadata()

@@ -536,6 +536,7 @@ export const SuspendedMockUser: TypesGen.User = {
 
 export const MockUserAppearanceSettings: TypesGen.UserAppearanceSettings = {
 	theme_preference: "dark",
+	terminal_font: "",
 };
 
 export const MockOrganizationMember: TypesGen.OrganizationMemberWithUserData = {
@@ -977,6 +978,20 @@ export const MockWorkspaceAgent: TypesGen.WorkspaceAgent = {
 	],
 };
 
+export const MockWorkspaceAppStatus: TypesGen.WorkspaceAppStatus = {
+	id: "test-app-status",
+	created_at: "2022-05-17T17:39:01.382927298Z",
+	agent_id: "test-workspace-agent",
+	workspace_id: "test-workspace",
+	app_id: MockWorkspaceApp.id,
+	uri: "https://github.com/coder/coder/pull/1234",
+	message: "Your competitors page is completed!",
+	state: "complete",
+	// Deprecated fields
+	needs_user_attention: false,
+	icon: "",
+};
+
 export const MockWorkspaceAgentDisconnected: TypesGen.WorkspaceAgent = {
 	...MockWorkspaceAgent,
 	id: "test-workspace-agent-2",
@@ -1252,6 +1267,7 @@ export const MockWorkspaceBuild: TypesGen.WorkspaceBuild = {
 		count: 1,
 		available: 1,
 	},
+	template_version_preset_id: null,
 };
 
 export const MockWorkspaceBuildAutostart: TypesGen.WorkspaceBuild = {
@@ -1275,6 +1291,7 @@ export const MockWorkspaceBuildAutostart: TypesGen.WorkspaceBuild = {
 	resources: [MockWorkspaceResource],
 	status: "running",
 	daily_cost: 20,
+	template_version_preset_id: null,
 };
 
 export const MockWorkspaceBuildAutostop: TypesGen.WorkspaceBuild = {
@@ -1298,6 +1315,7 @@ export const MockWorkspaceBuildAutostop: TypesGen.WorkspaceBuild = {
 	resources: [MockWorkspaceResource],
 	status: "running",
 	daily_cost: 20,
+	template_version_preset_id: null,
 };
 
 export const MockFailedWorkspaceBuild = (
@@ -1323,6 +1341,7 @@ export const MockFailedWorkspaceBuild = (
 	resources: [],
 	status: "failed",
 	daily_cost: 20,
+	template_version_preset_id: null,
 });
 
 export const MockWorkspaceBuildStop: TypesGen.WorkspaceBuild = {
@@ -3019,6 +3038,7 @@ export const MockDeploymentStats: TypesGen.DeploymentStats = {
 export const MockDeploymentSSH: TypesGen.SSHConfigResponse = {
 	hostname_prefix: " coder.",
 	ssh_config_options: {},
+	hostname_suffix: "coder",
 };
 
 export const MockWorkspaceAgentLogs: TypesGen.WorkspaceAgentLog[] = [

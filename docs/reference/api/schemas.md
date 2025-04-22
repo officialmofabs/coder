@@ -133,14 +133,14 @@
 
 ### Properties
 
-| Name                   | Type                                                                 | Required | Restrictions | Description |
-|------------------------|----------------------------------------------------------------------|----------|--------------|-------------|
-| `app_slug`             | string                                                               | false    |              |             |
-| `icon`                 | string                                                               | false    |              |             |
-| `message`              | string                                                               | false    |              |             |
-| `needs_user_attention` | boolean                                                              | false    |              |             |
-| `state`                | [codersdk.WorkspaceAppStatusState](#codersdkworkspaceappstatusstate) | false    |              |             |
-| `uri`                  | string                                                               | false    |              |             |
+| Name                   | Type                                                                 | Required | Restrictions | Description                                                               |
+|------------------------|----------------------------------------------------------------------|----------|--------------|---------------------------------------------------------------------------|
+| `app_slug`             | string                                                               | false    |              |                                                                           |
+| `icon`                 | string                                                               | false    |              | Deprecated: this field is unused and will be removed in a future version. |
+| `message`              | string                                                               | false    |              |                                                                           |
+| `needs_user_attention` | boolean                                                              | false    |              | Deprecated: this field is unused and will be removed in a future version. |
+| `state`                | [codersdk.WorkspaceAppStatusState](#codersdkworkspaceappstatusstate) | false    |              |                                                                           |
+| `uri`                  | string                                                               | false    |              |                                                                           |
 
 ## agentsdk.PatchLogs
 
@@ -629,9 +629,7 @@
 ```json
 {
   "action": "create",
-  "additional_fields": [
-    0
-  ],
+  "additional_fields": {},
   "description": "string",
   "diff": {
     "property1": {
@@ -695,7 +693,7 @@
 | Name                | Type                                                         | Required | Restrictions | Description                                  |
 |---------------------|--------------------------------------------------------------|----------|--------------|----------------------------------------------|
 | `action`            | [codersdk.AuditAction](#codersdkauditaction)                 | false    |              |                                              |
-| `additional_fields` | array of integer                                             | false    |              |                                              |
+| `additional_fields` | object                                                       | false    |              |                                              |
 | `description`       | string                                                       | false    |              |                                              |
 | `diff`              | [codersdk.AuditDiff](#codersdkauditdiff)                     | false    |              |                                              |
 | `id`                | string                                                       | false    |              |                                              |
@@ -721,9 +719,7 @@
   "audit_logs": [
     {
       "action": "create",
-      "additional_fields": [
-        0
-      ],
+      "additional_fields": {},
       "description": "string",
       "diff": {
         "property1": {
@@ -1338,52 +1334,12 @@ This is required on creation to enable a user-flow of validating a template work
 ## codersdk.CreateTestAuditLogRequest
 
 ```json
-{
-  "action": "create",
-  "additional_fields": [
-    0
-  ],
-  "build_reason": "autostart",
-  "organization_id": "7c60d51f-b44e-4682-87d6-449835ea4de6",
-  "request_id": "266ea41d-adf5-480b-af50-15b940c2b846",
-  "resource_id": "4d5215ed-38bb-48ed-879a-fdb9ca58522f",
-  "resource_type": "template",
-  "time": "2019-08-24T14:15:22Z"
-}
+{}
 ```
 
 ### Properties
 
-| Name                | Type                                           | Required | Restrictions | Description |
-|---------------------|------------------------------------------------|----------|--------------|-------------|
-| `action`            | [codersdk.AuditAction](#codersdkauditaction)   | false    |              |             |
-| `additional_fields` | array of integer                               | false    |              |             |
-| `build_reason`      | [codersdk.BuildReason](#codersdkbuildreason)   | false    |              |             |
-| `organization_id`   | string                                         | false    |              |             |
-| `request_id`        | string                                         | false    |              |             |
-| `resource_id`       | string                                         | false    |              |             |
-| `resource_type`     | [codersdk.ResourceType](#codersdkresourcetype) | false    |              |             |
-| `time`              | string                                         | false    |              |             |
-
-#### Enumerated Values
-
-| Property        | Value              |
-|-----------------|--------------------|
-| `action`        | `create`           |
-| `action`        | `write`            |
-| `action`        | `delete`           |
-| `action`        | `start`            |
-| `action`        | `stop`             |
-| `build_reason`  | `autostart`        |
-| `build_reason`  | `autostop`         |
-| `build_reason`  | `initiator`        |
-| `resource_type` | `template`         |
-| `resource_type` | `template_version` |
-| `resource_type` | `user`             |
-| `resource_type` | `workspace`        |
-| `resource_type` | `workspace_build`  |
-| `resource_type` | `git_ssh_key`      |
-| `resource_type` | `auditable_group`  |
+None
 
 ## codersdk.CreateTokenRequest
 
@@ -1455,21 +1411,23 @@ This is required on creation to enable a user-flow of validating a template work
     0
   ],
   "template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
+  "template_version_preset_id": "512a53a7-30da-446e-a1fc-713c630baff1",
   "transition": "start"
 }
 ```
 
 ### Properties
 
-| Name                    | Type                                                                          | Required | Restrictions | Description                                                                                                                                                                                                   |
-|-------------------------|-------------------------------------------------------------------------------|----------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `dry_run`               | boolean                                                                       | false    |              |                                                                                                                                                                                                               |
-| `log_level`             | [codersdk.ProvisionerLogLevel](#codersdkprovisionerloglevel)                  | false    |              | Log level changes the default logging verbosity of a provider ("info" if empty).                                                                                                                              |
-| `orphan`                | boolean                                                                       | false    |              | Orphan may be set for the Destroy transition.                                                                                                                                                                 |
-| `rich_parameter_values` | array of [codersdk.WorkspaceBuildParameter](#codersdkworkspacebuildparameter) | false    |              | Rich parameter values are optional. It will write params to the 'workspace' scope. This will overwrite any existing parameters with the same name. This will not delete old params not included in this list. |
-| `state`                 | array of integer                                                              | false    |              |                                                                                                                                                                                                               |
-| `template_version_id`   | string                                                                        | false    |              |                                                                                                                                                                                                               |
-| `transition`            | [codersdk.WorkspaceTransition](#codersdkworkspacetransition)                  | true     |              |                                                                                                                                                                                                               |
+| Name                         | Type                                                                          | Required | Restrictions | Description                                                                                                                                                                                                   |
+|------------------------------|-------------------------------------------------------------------------------|----------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `dry_run`                    | boolean                                                                       | false    |              |                                                                                                                                                                                                               |
+| `log_level`                  | [codersdk.ProvisionerLogLevel](#codersdkprovisionerloglevel)                  | false    |              | Log level changes the default logging verbosity of a provider ("info" if empty).                                                                                                                              |
+| `orphan`                     | boolean                                                                       | false    |              | Orphan may be set for the Destroy transition.                                                                                                                                                                 |
+| `rich_parameter_values`      | array of [codersdk.WorkspaceBuildParameter](#codersdkworkspacebuildparameter) | false    |              | Rich parameter values are optional. It will write params to the 'workspace' scope. This will overwrite any existing parameters with the same name. This will not delete old params not included in this list. |
+| `state`                      | array of integer                                                              | false    |              |                                                                                                                                                                                                               |
+| `template_version_id`        | string                                                                        | false    |              |                                                                                                                                                                                                               |
+| `template_version_preset_id` | string                                                                        | false    |              | Template version preset ID is the ID of the template version preset to use for the build.                                                                                                                     |
+| `transition`                 | [codersdk.WorkspaceTransition](#codersdkworkspacetransition)                  | true     |              |                                                                                                                                                                                                               |
 
 #### Enumerated Values
 
@@ -1513,23 +1471,25 @@ This is required on creation to enable a user-flow of validating a template work
   ],
   "template_id": "c6d67e98-83ea-49f0-8812-e4abae2b68bc",
   "template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
+  "template_version_preset_id": "512a53a7-30da-446e-a1fc-713c630baff1",
   "ttl_ms": 0
 }
 ```
 
-CreateWorkspaceRequest provides options for creating a new workspace. Only one of TemplateID or TemplateVersionID can be specified, not both. If TemplateID is specified, the active version of the template will be used.
+CreateWorkspaceRequest provides options for creating a new workspace. Only one of TemplateID or TemplateVersionID can be specified, not both. If TemplateID is specified, the active version of the template will be used. Workspace names: - Must start with a letter or number - Can only contain letters, numbers, and hyphens - Cannot contain spaces or special characters - Cannot be named `new` or `create` - Must be unique within your workspaces - Maximum length of 32 characters
 
 ### Properties
 
-| Name                    | Type                                                                          | Required | Restrictions | Description                                                                                             |
-|-------------------------|-------------------------------------------------------------------------------|----------|--------------|---------------------------------------------------------------------------------------------------------|
-| `automatic_updates`     | [codersdk.AutomaticUpdates](#codersdkautomaticupdates)                        | false    |              |                                                                                                         |
-| `autostart_schedule`    | string                                                                        | false    |              |                                                                                                         |
-| `name`                  | string                                                                        | true     |              |                                                                                                         |
-| `rich_parameter_values` | array of [codersdk.WorkspaceBuildParameter](#codersdkworkspacebuildparameter) | false    |              | Rich parameter values allows for additional parameters to be provided during the initial provision.     |
-| `template_id`           | string                                                                        | false    |              | Template ID specifies which template should be used for creating the workspace.                         |
-| `template_version_id`   | string                                                                        | false    |              | Template version ID can be used to specify a specific version of a template for creating the workspace. |
-| `ttl_ms`                | integer                                                                       | false    |              |                                                                                                         |
+| Name                         | Type                                                                          | Required | Restrictions | Description                                                                                             |
+|------------------------------|-------------------------------------------------------------------------------|----------|--------------|---------------------------------------------------------------------------------------------------------|
+| `automatic_updates`          | [codersdk.AutomaticUpdates](#codersdkautomaticupdates)                        | false    |              |                                                                                                         |
+| `autostart_schedule`         | string                                                                        | false    |              |                                                                                                         |
+| `name`                       | string                                                                        | true     |              |                                                                                                         |
+| `rich_parameter_values`      | array of [codersdk.WorkspaceBuildParameter](#codersdkworkspacebuildparameter) | false    |              | Rich parameter values allows for additional parameters to be provided during the initial provision.     |
+| `template_id`                | string                                                                        | false    |              | Template ID specifies which template should be used for creating the workspace.                         |
+| `template_version_id`        | string                                                                        | false    |              | Template version ID can be used to specify a specific version of a template for creating the workspace. |
+| `template_version_preset_id` | string                                                                        | false    |              |                                                                                                         |
+| `ttl_ms`                     | integer                                                                       | false    |              |                                                                                                         |
 
 ## codersdk.CryptoKey
 
@@ -1949,6 +1909,10 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
       "threshold_database": 0
     },
     "http_address": "string",
+    "http_cookies": {
+      "same_site": "string",
+      "secure_auth_cookie": true
+    },
     "in_memory_database": true,
     "job_hang_detector_interval": 0,
     "logging": {
@@ -2122,7 +2086,6 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
     },
     "redirect_to_access_url": true,
     "scim_api_key": "string",
-    "secure_auth_cookie": true,
     "session_lifetime": {
       "default_duration": 0,
       "default_token_lifetime": 0,
@@ -2204,6 +2167,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
     "web_terminal_renderer": "string",
     "wgtunnel_host": "string",
     "wildcard_access_url": "string",
+    "workspace_hostname_suffix": "string",
     "write_config": true
   },
   "options": [
@@ -2425,6 +2389,10 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
     "threshold_database": 0
   },
   "http_address": "string",
+  "http_cookies": {
+    "same_site": "string",
+    "secure_auth_cookie": true
+  },
   "in_memory_database": true,
   "job_hang_detector_interval": 0,
   "logging": {
@@ -2598,7 +2566,6 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   },
   "redirect_to_access_url": true,
   "scim_api_key": "string",
-  "secure_auth_cookie": true,
   "session_lifetime": {
     "default_duration": 0,
     "default_token_lifetime": 0,
@@ -2680,6 +2647,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
   "web_terminal_renderer": "string",
   "wgtunnel_host": "string",
   "wildcard_access_url": "string",
+  "workspace_hostname_suffix": "string",
   "write_config": true
 }
 ```
@@ -2713,6 +2681,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `external_token_encryption_keys`     | array of string                                                                                      | false    |              |                                                                    |
 | `healthcheck`                        | [codersdk.HealthcheckConfig](#codersdkhealthcheckconfig)                                             | false    |              |                                                                    |
 | `http_address`                       | string                                                                                               | false    |              | Http address is a string because it may be set to zero to disable. |
+| `http_cookies`                       | [codersdk.HTTPCookieConfig](#codersdkhttpcookieconfig)                                               | false    |              |                                                                    |
 | `in_memory_database`                 | boolean                                                                                              | false    |              |                                                                    |
 | `job_hang_detector_interval`         | integer                                                                                              | false    |              |                                                                    |
 | `logging`                            | [codersdk.LoggingConfig](#codersdkloggingconfig)                                                     | false    |              |                                                                    |
@@ -2731,7 +2700,6 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `rate_limit`                         | [codersdk.RateLimitConfig](#codersdkratelimitconfig)                                                 | false    |              |                                                                    |
 | `redirect_to_access_url`             | boolean                                                                                              | false    |              |                                                                    |
 | `scim_api_key`                       | string                                                                                               | false    |              |                                                                    |
-| `secure_auth_cookie`                 | boolean                                                                                              | false    |              |                                                                    |
 | `session_lifetime`                   | [codersdk.SessionLifetime](#codersdksessionlifetime)                                                 | false    |              |                                                                    |
 | `ssh_keygen_algorithm`               | string                                                                                               | false    |              |                                                                    |
 | `strict_transport_security`          | integer                                                                                              | false    |              |                                                                    |
@@ -2748,6 +2716,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `web_terminal_renderer`              | string                                                                                               | false    |              |                                                                    |
 | `wgtunnel_host`                      | string                                                                                               | false    |              |                                                                    |
 | `wildcard_access_url`                | string                                                                                               | false    |              |                                                                    |
+| `workspace_hostname_suffix`          | string                                                                                               | false    |              |                                                                    |
 | `write_config`                       | boolean                                                                                              | false    |              |                                                                    |
 
 ## codersdk.DisplayApp
@@ -2845,6 +2814,7 @@ CreateWorkspaceRequest provides options for creating a new workspace. Only one o
 | `notifications`        |
 | `workspace-usage`      |
 | `web-push`             |
+| `dynamic-parameters`   |
 
 ## codersdk.ExternalAuth
 
@@ -3298,6 +3268,22 @@ Git clone makes use of this by parsing the URL from: 'Username for "https://gith
 | » `[any property]`           | array of string                | false    |              |                                                                                                                                                                                                                                                                                        |
 | `regex_filter`               | [regexp.Regexp](#regexpregexp) | false    |              | Regex filter is a regular expression that filters the groups returned by the OIDC provider. Any group not matched by this regex will be ignored. If the group filter is nil, then no group filtering will occur.                                                                       |
 
+## codersdk.HTTPCookieConfig
+
+```json
+{
+  "same_site": "string",
+  "secure_auth_cookie": true
+}
+```
+
+### Properties
+
+| Name                 | Type    | Required | Restrictions | Description |
+|----------------------|---------|----------|--------------|-------------|
+| `same_site`          | string  | false    |              |             |
+| `secure_auth_cookie` | boolean | false    |              |             |
+
 ## codersdk.Healthcheck
 
 ```json
@@ -3431,30 +3417,6 @@ Git clone makes use of this by parsing the URL from: 'Username for "https://gith
 | Name           | Type   | Required | Restrictions | Description |
 |----------------|--------|----------|--------------|-------------|
 | `signed_token` | string | false    |              |             |
-
-## codersdk.JFrogXrayScan
-
-```json
-{
-  "agent_id": "2b1e3b65-2c04-4fa2-a2d7-467901e98978",
-  "critical": 0,
-  "high": 0,
-  "medium": 0,
-  "results_url": "string",
-  "workspace_id": "0967198e-ec7b-4c6b-b4d3-f71244cadbe9"
-}
-```
-
-### Properties
-
-| Name           | Type    | Required | Restrictions | Description |
-|----------------|---------|----------|--------------|-------------|
-| `agent_id`     | string  | false    |              |             |
-| `critical`     | integer | false    |              |             |
-| `high`         | integer | false    |              |             |
-| `medium`       | integer | false    |              |             |
-| `results_url`  | string  | false    |              |             |
-| `workspace_id` | string  | false    |              |             |
 
 ## codersdk.JobErrorCode
 
@@ -5744,6 +5706,7 @@ Git clone makes use of this by parsing the URL from: 'Username for "https://gith
 ```json
 {
   "hostname_prefix": "string",
+  "hostname_suffix": "string",
   "ssh_config_options": {
     "property1": "string",
     "property2": "string"
@@ -5753,11 +5716,12 @@ Git clone makes use of this by parsing the URL from: 'Username for "https://gith
 
 ### Properties
 
-| Name                 | Type   | Required | Restrictions | Description |
-|----------------------|--------|----------|--------------|-------------|
-| `hostname_prefix`    | string | false    |              |             |
-| `ssh_config_options` | object | false    |              |             |
-| » `[any property]`   | string | false    |              |             |
+| Name                 | Type   | Required | Restrictions | Description                                                                                                           |
+|----------------------|--------|----------|--------------|-----------------------------------------------------------------------------------------------------------------------|
+| `hostname_prefix`    | string | false    |              | Hostname prefix is the prefix we append to workspace names for SSH hostnames. Deprecated: use HostnameSuffix instead. |
+| `hostname_suffix`    | string | false    |              | Hostname suffix is the suffix to append to workspace names for SSH hostnames.                                         |
+| `ssh_config_options` | object | false    |              |                                                                                                                       |
+| » `[any property]`   | string | false    |              |                                                                                                                       |
 
 ## codersdk.ServerSentEvent
 
@@ -6711,6 +6675,24 @@ Restarts will only happen on weekdays in this list on weeks which line up with W
 |--------------------------|
 | `UNSUPPORTED_WORKSPACES` |
 
+## codersdk.TerminalFontName
+
+```json
+""
+```
+
+### Properties
+
+#### Enumerated Values
+
+| Value             |
+|-------------------|
+| ``                |
+| `ibm-plex-mono`   |
+| `fira-code`       |
+| `source-code-pro` |
+| `jetbrains-mono`  |
+
 ## codersdk.TimingStage
 
 ```json
@@ -6908,15 +6890,17 @@ Restarts will only happen on weekdays in this list on weeks which line up with W
 
 ```json
 {
+  "terminal_font": "",
   "theme_preference": "string"
 }
 ```
 
 ### Properties
 
-| Name               | Type   | Required | Restrictions | Description |
-|--------------------|--------|----------|--------------|-------------|
-| `theme_preference` | string | true     |              |             |
+| Name               | Type                                                   | Required | Restrictions | Description |
+|--------------------|--------------------------------------------------------|----------|--------------|-------------|
+| `terminal_font`    | [codersdk.TerminalFontName](#codersdkterminalfontname) | true     |              |             |
+| `theme_preference` | string                                                 | true     |              |             |
 
 ## codersdk.UpdateUserNotificationPreferences
 
@@ -7259,15 +7243,17 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 
 ```json
 {
+  "terminal_font": "",
   "theme_preference": "string"
 }
 ```
 
 ### Properties
 
-| Name               | Type   | Required | Restrictions | Description |
-|--------------------|--------|----------|--------------|-------------|
-| `theme_preference` | string | false    |              |             |
+| Name               | Type                                                   | Required | Restrictions | Description |
+|--------------------|--------------------------------------------------------|----------|--------------|-------------|
+| `terminal_font`    | [codersdk.TerminalFontName](#codersdkterminalfontname) | false    |              |             |
+| `theme_preference` | string                                                 | false    |              |             |
 
 ## codersdk.UserLatency
 
@@ -7779,6 +7765,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
     "status": "pending",
     "template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
     "template_version_name": "string",
+    "template_version_preset_id": "512a53a7-30da-446e-a1fc-713c630baff1",
     "transition": "start",
     "updated_at": "2019-08-24T14:15:22Z",
     "workspace_id": "0967198e-ec7b-4c6b-b4d3-f71244cadbe9",
@@ -8512,18 +8499,18 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 
 ### Properties
 
-| Name                   | Type                                                                 | Required | Restrictions | Description                                                                                                                |
-|------------------------|----------------------------------------------------------------------|----------|--------------|----------------------------------------------------------------------------------------------------------------------------|
-| `agent_id`             | string                                                               | false    |              |                                                                                                                            |
-| `app_id`               | string                                                               | false    |              |                                                                                                                            |
-| `created_at`           | string                                                               | false    |              |                                                                                                                            |
-| `icon`                 | string                                                               | false    |              | Icon is an external URL to an icon that will be rendered in the UI.                                                        |
-| `id`                   | string                                                               | false    |              |                                                                                                                            |
-| `message`              | string                                                               | false    |              |                                                                                                                            |
-| `needs_user_attention` | boolean                                                              | false    |              |                                                                                                                            |
-| `state`                | [codersdk.WorkspaceAppStatusState](#codersdkworkspaceappstatusstate) | false    |              |                                                                                                                            |
-| `uri`                  | string                                                               | false    |              | Uri is the URI of the resource that the status is for. e.g. https://github.com/org/repo/pull/123 e.g. file:///path/to/file |
-| `workspace_id`         | string                                                               | false    |              |                                                                                                                            |
+| Name                   | Type                                                                 | Required | Restrictions | Description                                                                                                                                     |
+|------------------------|----------------------------------------------------------------------|----------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `agent_id`             | string                                                               | false    |              |                                                                                                                                                 |
+| `app_id`               | string                                                               | false    |              |                                                                                                                                                 |
+| `created_at`           | string                                                               | false    |              |                                                                                                                                                 |
+| `icon`                 | string                                                               | false    |              | Deprecated: This field is unused and will be removed in a future version. Icon is an external URL to an icon that will be rendered in the UI.   |
+| `id`                   | string                                                               | false    |              |                                                                                                                                                 |
+| `message`              | string                                                               | false    |              |                                                                                                                                                 |
+| `needs_user_attention` | boolean                                                              | false    |              | Deprecated: This field is unused and will be removed in a future version. NeedsUserAttention specifies whether the status needs user attention. |
+| `state`                | [codersdk.WorkspaceAppStatusState](#codersdkworkspaceappstatusstate) | false    |              |                                                                                                                                                 |
+| `uri`                  | string                                                               | false    |              | Uri is the URI of the resource that the status is for. e.g. https://github.com/org/repo/pull/123 e.g. file:///path/to/file                      |
+| `workspace_id`         | string                                                               | false    |              |                                                                                                                                                 |
 
 ## codersdk.WorkspaceAppStatusState
 
@@ -8730,6 +8717,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
   "status": "pending",
   "template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
   "template_version_name": "string",
+  "template_version_preset_id": "512a53a7-30da-446e-a1fc-713c630baff1",
   "transition": "start",
   "updated_at": "2019-08-24T14:15:22Z",
   "workspace_id": "0967198e-ec7b-4c6b-b4d3-f71244cadbe9",
@@ -8759,6 +8747,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
 | `status`                     | [codersdk.WorkspaceStatus](#codersdkworkspacestatus)              | false    |              |             |
 | `template_version_id`        | string                                                            | false    |              |             |
 | `template_version_name`      | string                                                            | false    |              |             |
+| `template_version_preset_id` | string                                                            | false    |              |             |
 | `transition`                 | [codersdk.WorkspaceTransition](#codersdkworkspacetransition)      | false    |              |             |
 | `updated_at`                 | string                                                            | false    |              |             |
 | `workspace_id`               | string                                                            | false    |              |             |
@@ -9426,6 +9415,7 @@ If the schedule is empty, the user will be updated to use the default schedule.|
         "status": "pending",
         "template_version_id": "0ba39c92-1f1b-4c32-aa3e-9925d7713eb1",
         "template_version_name": "string",
+        "template_version_preset_id": "512a53a7-30da-446e-a1fc-713c630baff1",
         "transition": "start",
         "updated_at": "2019-08-24T14:15:22Z",
         "workspace_id": "0967198e-ec7b-4c6b-b4d3-f71244cadbe9",
@@ -11508,7 +11498,8 @@ None
       }
     }
   },
-  "disable_direct_connections": true
+  "disable_direct_connections": true,
+  "hostname_suffix": "string"
 }
 ```
 
@@ -11519,6 +11510,7 @@ None
 | `derp_force_websockets`      | boolean                            | false    |              |             |
 | `derp_map`                   | [tailcfg.DERPMap](#tailcfgderpmap) | false    |              |             |
 | `disable_direct_connections` | boolean                            | false    |              |             |
+| `hostname_suffix`            | string                             | false    |              |             |
 
 ## wsproxysdk.CryptoKeysResponse
 

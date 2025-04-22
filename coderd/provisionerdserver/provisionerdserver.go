@@ -27,6 +27,8 @@ import (
 
 	"cdr.dev/slog"
 
+	"github.com/coder/quartz"
+
 	"github.com/coder/coder/v2/coderd/apikey"
 	"github.com/coder/coder/v2/coderd/audit"
 	"github.com/coder/coder/v2/coderd/database"
@@ -46,7 +48,6 @@ import (
 	"github.com/coder/coder/v2/provisionerd/proto"
 	"github.com/coder/coder/v2/provisionersdk"
 	sdkproto "github.com/coder/coder/v2/provisionersdk/proto"
-	"github.com/coder/quartz"
 )
 
 const (
@@ -594,17 +595,24 @@ func (s *server) acquireProtoJob(ctx context.Context, job database.ProvisionerJo
 			})
 		}
 
-		roles, err := s.Database.GetAuthorizationUserRoles(ctx, owner.ID)
+		allUserRoles, err := s.Database.GetAuthorizationUserRoles(ctx, owner.ID)
 		if err != nil {
 			return nil, failJob(fmt.Sprintf("get owner authorization roles: %s", err))
 		}
 		ownerRbacRoles := []*sdkproto.Role{}
-		for _, role := range roles.Roles {
-			if s.OrganizationID == uuid.Nil {
-				ownerRbacRoles = append(ownerRbacRoles, &sdkproto.Role{Name: role, OrgId: ""})
-				continue
+		roles, err := allUserRoles.RoleNames()
+		if err == nil {
+			for _, role := range roles {
+				if role.OrganizationID != uuid.Nil && role.OrganizationID != s.OrganizationID {
+					continue // Only include site wide and org specific roles
+				}
+
+				orgID := role.OrganizationID.String()
+				if role.OrganizationID == uuid.Nil {
+					orgID = ""
+				}
+				ownerRbacRoles = append(ownerRbacRoles, &sdkproto.Role{Name: role.Name, OrgId: orgID})
 			}
-			ownerRbacRoles = append(ownerRbacRoles, &sdkproto.Role{Name: role, OrgId: s.OrganizationID.String()})
 		}
 
 		protoJob.Type = &proto.AcquiredJob_WorkspaceBuild_{
@@ -635,6 +643,7 @@ func (s *server) acquireProtoJob(ctx context.Context, job database.ProvisionerJo
 					WorkspaceBuildId:              workspaceBuild.ID.String(),
 					WorkspaceOwnerLoginType:       string(owner.LoginType),
 					WorkspaceOwnerRbacRoles:       ownerRbacRoles,
+					IsPrebuild:                    input.IsPrebuild,
 				},
 				LogLevel: input.LogLevel,
 			},
@@ -1415,13 +1424,15 @@ func (s *server) CompleteJob(ctx context.Context, completed *proto.CompletedJob)
 			return nil, xerrors.Errorf("update template version external auth providers: %w", err)
 		}
 
-		err = s.Database.InsertTemplateVersionTerraformValuesByJobID(ctx, database.InsertTemplateVersionTerraformValuesByJobIDParams{
-			JobID:      jobID,
-			CachedPlan: jobType.TemplateImport.Plan,
-			UpdatedAt:  now,
-		})
-		if err != nil {
-			return nil, xerrors.Errorf("insert template version terraform data: %w", err)
+		if len(jobType.TemplateImport.Plan) > 0 {
+			err := s.Database.InsertTemplateVersionTerraformValuesByJobID(ctx, database.InsertTemplateVersionTerraformValuesByJobIDParams{
+				JobID:      jobID,
+				CachedPlan: jobType.TemplateImport.Plan,
+				UpdatedAt:  now,
+			})
+			if err != nil {
+				return nil, xerrors.Errorf("insert template version terraform data: %w", err)
+			}
 		}
 
 		err = s.Database.UpdateProvisionerJobWithCompleteByID(ctx, database.UpdateProvisionerJobWithCompleteByIDParams{
@@ -1855,10 +1866,22 @@ func InsertWorkspacePresetsAndParameters(ctx context.Context, logger slog.Logger
 
 func InsertWorkspacePresetAndParameters(ctx context.Context, db database.Store, templateVersionID uuid.UUID, protoPreset *sdkproto.Preset, t time.Time) error {
 	err := db.InTx(func(tx database.Store) error {
+		var desiredInstances sql.NullInt32
+		if protoPreset != nil && protoPreset.Prebuild != nil {
+			desiredInstances = sql.NullInt32{
+				Int32: protoPreset.Prebuild.Instances,
+				Valid: true,
+			}
+		}
 		dbPreset, err := tx.InsertPreset(ctx, database.InsertPresetParams{
 			TemplateVersionID: templateVersionID,
 			Name:              protoPreset.Name,
 			CreatedAt:         t,
+			DesiredInstances:  desiredInstances,
+			InvalidateAfterSecs: sql.NullInt32{
+				Int32: 0,
+				Valid: false,
+			}, // TODO: implement cache invalidation
 		})
 		if err != nil {
 			return xerrors.Errorf("insert preset: %w", err)
@@ -1878,6 +1901,7 @@ func InsertWorkspacePresetAndParameters(ctx context.Context, db database.Store, 
 		if err != nil {
 			return xerrors.Errorf("insert preset parameters: %w", err)
 		}
+
 		return nil
 	}, nil)
 	if err != nil {
@@ -2447,6 +2471,7 @@ type TemplateVersionImportJob struct {
 type WorkspaceProvisionJob struct {
 	WorkspaceBuildID uuid.UUID `json:"workspace_build_id"`
 	DryRun           bool      `json:"dry_run"`
+	IsPrebuild       bool      `json:"is_prebuild,omitempty"`
 	LogLevel         string    `json:"log_level,omitempty"`
 }
 

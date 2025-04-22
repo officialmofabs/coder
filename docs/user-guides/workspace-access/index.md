@@ -80,6 +80,18 @@ desktop client and VSCode in the browser with [code-server](#code-server).
 
 Read more details on [using VSCode in your workspace](./vscode.md).
 
+## Cursor
+
+[Cursor](https://cursor.sh/) is an IDE built on VS Code with enhanced AI capabilities.
+Cursor connects using the Coder extension.
+
+Read more about [using Cursor with your workspace](./cursor.md).
+
+## Windsurf
+
+[Windsurf](./windsurf.md) is Codeium's code editor designed for AI-assisted development.
+Windsurf connects using the Coder extension.
+
 ## JetBrains IDEs
 
 We support JetBrains IDEs using
@@ -93,10 +105,10 @@ IDEs are supported for remote development:
 - Rider
 - RubyMine
 - WebStorm
-- [JetBrains Fleet](./jetbrains.md#jetbrains-fleet)
+- [JetBrains Fleet](./jetbrains/index.md#jetbrains-fleet)
 
-Read our [docs on JetBrains Gateway](./jetbrains.md) for more information on
-connecting your JetBrains IDEs.
+Read our [docs on JetBrains Gateway](./jetbrains/index.md) for more information
+on connecting your JetBrains IDEs.
 
 ## code-server
 

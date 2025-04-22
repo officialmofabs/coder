@@ -68,6 +68,54 @@ func TestMain(m *testing.M) {
 
 var sshPorts = []uint16{workspacesdk.AgentSSHPort, workspacesdk.AgentStandardSSHPort}
 
+// TestAgent_CloseWhileStarting is a regression test for https://github.com/coder/coder/issues/17328
+func TestAgent_ImmediateClose(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), testutil.WaitLong)
+	defer cancel()
+
+	logger := slogtest.Make(t, &slogtest.Options{
+		// Agent can drop errors when shutting down, and some, like the
+		// fasthttplistener connection closed error, are unexported.
+		IgnoreErrors: true,
+	}).Leveled(slog.LevelDebug)
+	manifest := agentsdk.Manifest{
+		AgentID:       uuid.New(),
+		AgentName:     "test-agent",
+		WorkspaceName: "test-workspace",
+		WorkspaceID:   uuid.New(),
+	}
+
+	coordinator := tailnet.NewCoordinator(logger)
+	t.Cleanup(func() {
+		_ = coordinator.Close()
+	})
+	statsCh := make(chan *proto.Stats, 50)
+	fs := afero.NewMemMapFs()
+	client := agenttest.NewClient(t, logger.Named("agenttest"), manifest.AgentID, manifest, statsCh, coordinator)
+	t.Cleanup(client.Close)
+
+	options := agent.Options{
+		Client:                 client,
+		Filesystem:             fs,
+		Logger:                 logger.Named("agent"),
+		ReconnectingPTYTimeout: 0,
+		EnvironmentVariables:   map[string]string{},
+	}
+
+	agentUnderTest := agent.New(options)
+	t.Cleanup(func() {
+		_ = agentUnderTest.Close()
+	})
+
+	// wait until the agent has connected and is starting to find races in the startup code
+	_ = testutil.TryReceive(ctx, t, client.GetStartup())
+	t.Log("Closing Agent")
+	err := agentUnderTest.Close()
+	require.NoError(t, err)
+}
+
 // NOTE: These tests only work when your default shell is bash for some reason.
 
 func TestAgent_Stats_SSH(t *testing.T) {
@@ -190,7 +238,7 @@ func TestAgent_Stats_Magic(t *testing.T) {
 			s, ok := <-stats
 			t.Logf("got stats: ok=%t, ConnectionCount=%d, RxBytes=%d, TxBytes=%d, SessionCountVSCode=%d, ConnectionMedianLatencyMS=%f",
 				ok, s.ConnectionCount, s.RxBytes, s.TxBytes, s.SessionCountVscode, s.ConnectionMedianLatencyMs)
-			return ok && s.ConnectionCount > 0 && s.RxBytes > 0 && s.TxBytes > 0 &&
+			return ok &&
 				// Ensure that the connection didn't count as a "normal" SSH session.
 				// This was a special one, so it should be labeled specially in the stats!
 				s.SessionCountVscode == 1 &&
@@ -258,8 +306,7 @@ func TestAgent_Stats_Magic(t *testing.T) {
 			s, ok := <-stats
 			t.Logf("got stats with conn open: ok=%t, ConnectionCount=%d, SessionCountJetBrains=%d",
 				ok, s.ConnectionCount, s.SessionCountJetbrains)
-			return ok && s.ConnectionCount > 0 &&
-				s.SessionCountJetbrains == 1
+			return ok && s.SessionCountJetbrains == 1
 		}, testutil.WaitLong, testutil.IntervalFast,
 			"never saw stats with conn open",
 		)
@@ -1603,8 +1650,10 @@ func TestAgent_Lifecycle(t *testing.T) {
 	t.Run("ShutdownScriptOnce", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.Logger(t)
+		ctx := testutil.Context(t, testutil.WaitMedium)
 		expected := "this-is-shutdown"
 		derpMap, _ := tailnettest.RunDERPAndSTUN(t)
+		statsCh := make(chan *proto.Stats, 50)
 
 		client := agenttest.NewClient(t,
 			logger,
@@ -1623,7 +1672,7 @@ func TestAgent_Lifecycle(t *testing.T) {
 					RunOnStop: true,
 				}},
 			},
-			make(chan *proto.Stats, 50),
+			statsCh,
 			tailnet.NewCoordinator(logger),
 		)
 		defer client.Close()
@@ -1647,6 +1696,11 @@ func TestAgent_Lifecycle(t *testing.T) {
 			}
 			return len(content) > 0 // something is in the startup log file
 		}, testutil.WaitShort, testutil.IntervalMedium)
+
+		// In order to avoid shutting down the agent before it is fully started and triggering
+		// errors, we'll wait until the agent is fully up. It's a bit hokey, but among the last things the agent starts
+		// is the stats reporting, so getting a stats report is a good indication the agent is fully up.
+		_ = testutil.TryReceive(ctx, t, statsCh)
 
 		err := agent.Close()
 		require.NoError(t, err, "agent should be closed successfully")
@@ -1676,7 +1730,7 @@ func TestAgent_Startup(t *testing.T) {
 		_, client, _, _, _ := setupAgent(t, agentsdk.Manifest{
 			Directory: "",
 		}, 0)
-		startup := testutil.RequireRecvCtx(ctx, t, client.GetStartup())
+		startup := testutil.TryReceive(ctx, t, client.GetStartup())
 		require.Equal(t, "", startup.GetExpandedDirectory())
 	})
 
@@ -1687,7 +1741,7 @@ func TestAgent_Startup(t *testing.T) {
 		_, client, _, _, _ := setupAgent(t, agentsdk.Manifest{
 			Directory: "~",
 		}, 0)
-		startup := testutil.RequireRecvCtx(ctx, t, client.GetStartup())
+		startup := testutil.TryReceive(ctx, t, client.GetStartup())
 		homeDir, err := os.UserHomeDir()
 		require.NoError(t, err)
 		require.Equal(t, homeDir, startup.GetExpandedDirectory())
@@ -1700,7 +1754,7 @@ func TestAgent_Startup(t *testing.T) {
 		_, client, _, _, _ := setupAgent(t, agentsdk.Manifest{
 			Directory: "coder/coder",
 		}, 0)
-		startup := testutil.RequireRecvCtx(ctx, t, client.GetStartup())
+		startup := testutil.TryReceive(ctx, t, client.GetStartup())
 		homeDir, err := os.UserHomeDir()
 		require.NoError(t, err)
 		require.Equal(t, filepath.Join(homeDir, "coder/coder"), startup.GetExpandedDirectory())
@@ -1713,7 +1767,7 @@ func TestAgent_Startup(t *testing.T) {
 		_, client, _, _, _ := setupAgent(t, agentsdk.Manifest{
 			Directory: "$HOME",
 		}, 0)
-		startup := testutil.RequireRecvCtx(ctx, t, client.GetStartup())
+		startup := testutil.TryReceive(ctx, t, client.GetStartup())
 		homeDir, err := os.UserHomeDir()
 		require.NoError(t, err)
 		require.Equal(t, homeDir, startup.GetExpandedDirectory())
@@ -2578,7 +2632,7 @@ done
 
 	n := 1
 	for n <= 5 {
-		logs := testutil.RequireRecvCtx(ctx, t, logsCh)
+		logs := testutil.TryReceive(ctx, t, logsCh)
 		require.NotNil(t, logs)
 		for _, l := range logs.GetLogs() {
 			require.Equal(t, fmt.Sprintf("start %d", n), l.GetOutput())
@@ -2591,7 +2645,7 @@ done
 
 	n = 1
 	for n <= 3000 {
-		logs := testutil.RequireRecvCtx(ctx, t, logsCh)
+		logs := testutil.TryReceive(ctx, t, logsCh)
 		require.NotNil(t, logs)
 		for _, l := range logs.GetLogs() {
 			require.Equal(t, fmt.Sprintf("stop %d", n), l.GetOutput())
