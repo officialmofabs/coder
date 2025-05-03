@@ -41,10 +41,12 @@ import (
 	"github.com/coder/quartz"
 	"github.com/coder/serpent"
 
+	"github.com/coder/coder/v2/coderd/ai"
 	"github.com/coder/coder/v2/coderd/cryptokeys"
 	"github.com/coder/coder/v2/coderd/entitlements"
 	"github.com/coder/coder/v2/coderd/files"
 	"github.com/coder/coder/v2/coderd/idpsync"
+	"github.com/coder/coder/v2/coderd/prebuilds"
 	"github.com/coder/coder/v2/coderd/runtimeconfig"
 	"github.com/coder/coder/v2/coderd/webpush"
 
@@ -154,6 +156,7 @@ type Options struct {
 	Authorizer                     rbac.Authorizer
 	AzureCertificates              x509.VerifyOptions
 	GoogleTokenValidator           *idtoken.Validator
+	LanguageModels                 ai.LanguageModels
 	GithubOAuth2Config             *GithubOAuth2Config
 	OIDCConfig                     *OIDCConfig
 	PrometheusRegistry             *prometheus.Registry
@@ -595,6 +598,8 @@ func New(options *Options) *API {
 	f := appearance.NewDefaultFetcher(api.DeploymentValues.DocsURL.String())
 	api.AppearanceFetcher.Store(&f)
 	api.PortSharer.Store(&portsharing.DefaultPortSharer)
+	api.PrebuildsClaimer.Store(&prebuilds.DefaultClaimer)
+	api.PrebuildsReconciler.Store(&prebuilds.DefaultReconciler)
 	buildInfo := codersdk.BuildInfoResponse{
 		ExternalURL:           buildinfo.ExternalURL(),
 		Version:               buildinfo.Version(),
@@ -848,7 +853,7 @@ func New(options *Options) *API {
 				next.ServeHTTP(w, r)
 			})
 		},
-		httpmw.CSRF(options.DeploymentValues.HTTPCookies),
+		// httpmw.CSRF(options.DeploymentValues.HTTPCookies),
 	)
 
 	// This incurs a performance hit from the middleware, but is required to make sure
@@ -953,6 +958,7 @@ func New(options *Options) *API {
 			r.Get("/config", api.deploymentValues)
 			r.Get("/stats", api.deploymentStats)
 			r.Get("/ssh", api.sshConfig)
+			r.Get("/llms", api.deploymentLLMs)
 		})
 		r.Route("/experiments", func(r chi.Router) {
 			r.Use(apiKeyMiddleware)
@@ -994,6 +1000,21 @@ func New(options *Options) *API {
 			)
 			r.Get("/{fileID}", api.fileByID)
 			r.Post("/", api.postFile)
+		})
+		// Chats are an experimental feature
+		r.Route("/chats", func(r chi.Router) {
+			r.Use(
+				apiKeyMiddleware,
+				httpmw.RequireExperiment(api.Experiments, codersdk.ExperimentAgenticChat),
+			)
+			r.Get("/", api.listChats)
+			r.Post("/", api.postChats)
+			r.Route("/{chat}", func(r chi.Router) {
+				r.Use(httpmw.ExtractChatParam(options.Database))
+				r.Get("/", api.chat)
+				r.Get("/messages", api.chatMessages)
+				r.Post("/messages", api.postChatMessages)
+			})
 		})
 		r.Route("/external-auth", func(r chi.Router) {
 			r.Use(
@@ -1566,9 +1587,11 @@ type API struct {
 	DERPMapper atomic.Pointer[func(derpMap *tailcfg.DERPMap) *tailcfg.DERPMap]
 	// AccessControlStore is a pointer to an atomic pointer since it is
 	// passed to dbauthz.
-	AccessControlStore *atomic.Pointer[dbauthz.AccessControlStore]
-	PortSharer         atomic.Pointer[portsharing.PortSharer]
-	FileCache          files.Cache
+	AccessControlStore  *atomic.Pointer[dbauthz.AccessControlStore]
+	PortSharer          atomic.Pointer[portsharing.PortSharer]
+	FileCache           files.Cache
+	PrebuildsClaimer    atomic.Pointer[prebuilds.Claimer]
+	PrebuildsReconciler atomic.Pointer[prebuilds.ReconciliationOrchestrator]
 
 	UpdatesProvider tailnet.WorkspaceUpdatesProvider
 
@@ -1656,6 +1679,13 @@ func (api *API) Close() error {
 	_ = api.AppSigningKeyCache.Close()
 	_ = api.AppEncryptionKeyCache.Close()
 	_ = api.UpdatesProvider.Close()
+
+	if current := api.PrebuildsReconciler.Load(); current != nil {
+		ctx, giveUp := context.WithTimeoutCause(context.Background(), time.Second*30, xerrors.New("gave up waiting for reconciler to stop before shutdown"))
+		defer giveUp()
+		(*current).Stop(ctx, nil)
+	}
+
 	return nil
 }
 
