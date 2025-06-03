@@ -10,7 +10,6 @@ import {
 	getDefaultFilterProps,
 } from "components/Filter/storyHelpers";
 import { DEFAULT_RECORDS_PER_PAGE } from "components/PaginationWidget/utils";
-import { ProxyContext, getPreferredProxy } from "contexts/ProxyContext";
 import dayjs from "dayjs";
 import uniqueId from "lodash/uniqueId";
 import type { ComponentProps } from "react";
@@ -18,15 +17,19 @@ import {
 	MockBuildInfo,
 	MockOrganization,
 	MockPendingProvisionerJob,
-	MockProxyLatencies,
 	MockStoppedWorkspace,
 	MockTemplate,
-	MockUser,
+	MockUserOwner,
 	MockWorkspace,
+	MockWorkspaceAgent,
 	MockWorkspaceAppStatus,
 	mockApiError,
 } from "testHelpers/entities";
-import { withDashboardProvider } from "testHelpers/storybook";
+import {
+	withAuthProvider,
+	withDashboardProvider,
+	withProxyProvider,
+} from "testHelpers/storybook";
 import { WorkspacesPageView } from "./WorkspacesPageView";
 
 const createWorkspace = (
@@ -105,7 +108,7 @@ const defaultFilterProps = getDefaultFilterProps<FilterProps>({
 		organizations: MockMenu,
 	},
 	values: {
-		owner: MockUser.username,
+		owner: MockUserOwner.username,
 		template: undefined,
 		status: undefined,
 	},
@@ -144,32 +147,9 @@ const meta: Meta<typeof WorkspacesPageView> = {
 				data: MockBuildInfo,
 			},
 		],
+		user: MockUserOwner,
 	},
-	decorators: [
-		withDashboardProvider,
-		(Story) => (
-			<ProxyContext.Provider
-				value={{
-					proxyLatencies: MockProxyLatencies,
-					proxy: getPreferredProxy([], undefined),
-					proxies: [],
-					isLoading: false,
-					isFetched: true,
-					clearProxy: () => {
-						return;
-					},
-					setProxy: () => {
-						return;
-					},
-					refetchProxyLatencies: (): Date => {
-						return new Date();
-					},
-				}}
-			>
-				<Story />
-			</ProxyContext.Provider>
-		),
-	],
+	decorators: [withAuthProvider, withDashboardProvider, withProxyProvider()],
 };
 
 export default meta;
@@ -294,6 +274,42 @@ export const InvalidPageNumber: Story = {
 		count: 200,
 		limit: 25,
 		page: 1000,
+	},
+};
+
+export const MultipleApps: Story = {
+	args: {
+		workspaces: [
+			{
+				...MockWorkspace,
+				latest_build: {
+					...MockWorkspace.latest_build,
+					resources: [
+						{
+							...MockWorkspace.latest_build.resources[0],
+							agents: [
+								{
+									...MockWorkspaceAgent,
+									apps: [
+										{
+											...MockWorkspaceAgent.apps[0],
+											display_name: "App 1",
+											id: "app-1",
+										},
+										{
+											...MockWorkspaceAgent.apps[0],
+											display_name: "App 2",
+											id: "app-2",
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+			},
+		],
+		count: allWorkspaces.length,
 	},
 };
 

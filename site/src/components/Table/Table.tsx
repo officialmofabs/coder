@@ -3,6 +3,7 @@
  * @see {@link https://ui.shadcn.com/docs/components/table}
  */
 
+import { type VariantProps, cva } from "class-variance-authority";
 import * as React from "react";
 import { cn } from "utils/cn";
 
@@ -36,10 +37,10 @@ export const TableBody = React.forwardRef<
 	<tbody
 		ref={ref}
 		className={cn(
-			"[&>tr:first-child>td]:border-t [&>tr>td:first-child]:border-l",
+			"[&>tr:first-of-type>td]:border-t [&>tr>td:first-of-type]:border-l",
 			"[&>tr:last-child>td]:border-b [&>tr>td:last-child]:border-r",
-			"[&>tr:first-child>td:first-child]:rounded-tl-md [&>tr:first-child>td:last-child]:rounded-tr-md",
-			"[&>tr:last-child>td:first-child]:rounded-bl-md [&>tr:last-child>td:last-child]:rounded-br-md",
+			"[&>tr:first-of-type>td:first-of-type]:rounded-tl-md [&>tr:first-of-type>td:last-child]:rounded-tr-md",
+			"[&>tr:last-child>td:first-of-type]:rounded-bl-md [&>tr:last-child>td:last-child]:rounded-br-md",
 			className,
 		)}
 		{...props}
@@ -60,15 +61,38 @@ const TableFooter = React.forwardRef<
 	/>
 ));
 
+const tableRowVariants = cva(
+	[
+		"border-0 border-b border-solid border-border transition-colors",
+		"data-[state=selected]:bg-muted",
+	],
+	{
+		variants: {
+			hover: {
+				false: null,
+				true: cn([
+					"cursor-pointer hover:outline focus:outline outline-1 -outline-offset-1 outline-border-hover",
+					"first:rounded-t-md last:rounded-b-md",
+				]),
+			},
+		},
+		defaultVariants: {
+			hover: false,
+		},
+	},
+);
+
 export const TableRow = React.forwardRef<
 	HTMLTableRowElement,
-	React.HTMLAttributes<HTMLTableRowElement>
->(({ className, ...props }, ref) => (
+	React.HTMLAttributes<HTMLTableRowElement> &
+		VariantProps<typeof tableRowVariants>
+>(({ className, hover, ...props }, ref) => (
 	<tr
 		ref={ref}
 		className={cn(
 			"border-0 border-b border-solid border-border transition-colors",
 			"data-[state=selected]:bg-muted",
+			tableRowVariants({ hover }),
 			className,
 		)}
 		{...props}

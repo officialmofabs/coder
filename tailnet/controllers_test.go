@@ -828,7 +828,7 @@ func TestBasicResumeTokenController_Mainline(t *testing.T) {
 		RefreshIn: durationpb.New(100 * time.Second),
 		ExpiresAt: timestamppb.New(mClock.Now().Add(200 * time.Second)),
 	})
-	trp.MustWait(ctx).Release() // initial refresh done
+	trp.MustWait(ctx).MustRelease(ctx) // initial refresh done
 	token, ok := uut.Token()
 	require.True(t, ok)
 	require.Equal(t, "test token 1", token)
@@ -843,7 +843,7 @@ func TestBasicResumeTokenController_Mainline(t *testing.T) {
 	})
 	resetCall := trp.MustWait(ctx)
 	require.Equal(t, resetCall.Duration, 50*time.Second)
-	resetCall.Release()
+	resetCall.MustRelease(ctx)
 	w.MustWait(ctx)
 	token, ok = uut.Token()
 	require.True(t, ok)
@@ -903,7 +903,7 @@ func TestBasicResumeTokenController_NewWhileRefreshing(t *testing.T) {
 		ExpiresAt: timestamppb.New(mClock.Now().Add(200 * time.Second)),
 	})
 
-	trp.MustWait(ctx).Release()
+	trp.MustWait(ctx).MustRelease(ctx)
 
 	token, ok := uut.Token()
 	require.True(t, ok)
@@ -923,7 +923,7 @@ func TestBasicResumeTokenController_NewWhileRefreshing(t *testing.T) {
 	})
 	resetCall := trp.MustWait(ctx)
 	require.Equal(t, resetCall.Duration, 50*time.Second)
-	resetCall.Release()
+	resetCall.MustRelease(ctx)
 	w.MustWait(ctx)
 	token, ok = uut.Token()
 	require.True(t, ok)
@@ -1611,6 +1611,7 @@ func TestTunnelAllWorkspaceUpdatesController_Initial(t *testing.T) {
 		},
 		DeletedWorkspaces: []*tailnet.Workspace{},
 		DeletedAgents:     []*tailnet.Agent{},
+		Kind:              tailnet.Snapshot,
 	}
 
 	// And the callback
@@ -1626,6 +1627,9 @@ func TestTunnelAllWorkspaceUpdatesController_Initial(t *testing.T) {
 	slices.SortFunc(recvState.UpsertedAgents, func(a, b *tailnet.Agent) int {
 		return strings.Compare(a.Name, b.Name)
 	})
+	// tunnel is still open, so it's a diff
+	currentState.Kind = tailnet.Diff
+
 	require.Equal(t, currentState, recvState)
 }
 
@@ -1692,14 +1696,17 @@ func TestTunnelAllWorkspaceUpdatesController_DeleteAgent(t *testing.T) {
 		},
 		DeletedWorkspaces: []*tailnet.Workspace{},
 		DeletedAgents:     []*tailnet.Agent{},
+		Kind:              tailnet.Snapshot,
 	}
 
 	cbUpdate := testutil.TryReceive(ctx, t, fUH.ch)
 	require.Equal(t, initRecvUp, cbUpdate)
 
-	// Current state should match initial
 	state, err := updateCtrl.CurrentState()
 	require.NoError(t, err)
+	// tunnel is still open, so it's a diff
+	initRecvUp.Kind = tailnet.Diff
+
 	require.Equal(t, initRecvUp, state)
 
 	// Send update that removes w1a1 and adds w1a2

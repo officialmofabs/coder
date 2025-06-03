@@ -22,9 +22,8 @@ func NewDeps(client *codersdk.Client, opts ...func(*Deps)) (Deps, error) {
 	for _, opt := range opts {
 		opt(&d)
 	}
-	if d.coderClient == nil {
-		return Deps{}, xerrors.New("developer error: coder client may not be nil")
-	}
+	// Allow nil client for unauthenticated operation
+	// This enables tools that don't require user authentication to function
 	return d, nil
 }
 
@@ -54,6 +53,11 @@ type HandlerFunc[Arg, Ret any] func(context.Context, Deps, Arg) (Ret, error)
 type Tool[Arg, Ret any] struct {
 	aisdk.Tool
 	Handler HandlerFunc[Arg, Ret]
+
+	// UserClientOptional indicates whether this tool can function without a valid
+	// user authentication token. If true, the tool will be available even when
+	// running in an unauthenticated mode with just an agent token.
+	UserClientOptional bool
 }
 
 // Generic returns a type-erased version of a TypedTool where the arguments and
@@ -63,7 +67,8 @@ type Tool[Arg, Ret any] struct {
 // conversion.
 func (t Tool[Arg, Ret]) Generic() GenericTool {
 	return GenericTool{
-		Tool: t.Tool,
+		Tool:               t.Tool,
+		UserClientOptional: t.UserClientOptional,
 		Handler: wrap(func(ctx context.Context, deps Deps, args json.RawMessage) (json.RawMessage, error) {
 			var typedArgs Arg
 			if err := json.Unmarshal(args, &typedArgs); err != nil {
@@ -85,6 +90,11 @@ func (t Tool[Arg, Ret]) Generic() GenericTool {
 type GenericTool struct {
 	aisdk.Tool
 	Handler GenericHandlerFunc
+
+	// UserClientOptional indicates whether this tool can function without a valid
+	// user authentication token. If true, the tool will be available even when
+	// running in an unauthenticated mode with just an agent token.
+	UserClientOptional bool
 }
 
 // GenericHandlerFunc is a function that handles a tool call.
@@ -170,8 +180,27 @@ type ReportTaskArgs struct {
 
 var ReportTask = Tool[ReportTaskArgs, codersdk.Response]{
 	Tool: aisdk.Tool{
-		Name:        "coder_report_task",
-		Description: "Report progress on a user task in Coder.",
+		Name: "coder_report_task",
+		Description: `Report progress on your work.
+
+The user observes your work through a Task UI. To keep them updated
+on your progress, or if you need help - use this tool.
+
+Good Tasks
+- "Cloning the repository <repository-url>"
+- "Working on <feature-name>"
+- "Figuring our why <issue> is happening"
+
+Bad Tasks
+- "I'm working on it"
+- "I'm trying to fix it"
+- "I'm trying to implement <feature-name>"
+
+Use the "state" field to indicate your progress. Periodically report
+progress with state "working" to keep the user updated. It is not possible to send too many updates!
+
+ONLY report a "complete" or "failure" state if you have FULLY completed the task.
+`,
 		Schema: aisdk.Schema{
 			Properties: map[string]any{
 				"summary": map[string]any{
@@ -195,6 +224,7 @@ var ReportTask = Tool[ReportTaskArgs, codersdk.Response]{
 			Required: []string{"summary", "link", "state"},
 		},
 	},
+	UserClientOptional: true,
 	Handler: func(ctx context.Context, deps Deps, args ReportTaskArgs) (codersdk.Response, error) {
 		if deps.agentClient == nil {
 			return codersdk.Response{}, xerrors.New("tool unavailable as CODER_AGENT_TOKEN or CODER_AGENT_TOKEN_FILE not set")

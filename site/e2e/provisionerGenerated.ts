@@ -5,6 +5,21 @@ import { Timestamp } from "./google/protobuf/timestampGenerated";
 
 export const protobufPackage = "provisioner";
 
+export enum ParameterFormType {
+  DEFAULT = 0,
+  FORM_ERROR = 1,
+  RADIO = 2,
+  DROPDOWN = 3,
+  INPUT = 4,
+  TEXTAREA = 5,
+  SLIDER = 6,
+  CHECKBOX = 7,
+  SWITCH = 8,
+  TAGSELECT = 9,
+  MULTISELECT = 10,
+  UNRECOGNIZED = -1,
+}
+
 /** LogLevel represents severity of the log. */
 export enum LogLevel {
   TRACE = 0,
@@ -35,6 +50,16 @@ export enum WorkspaceTransition {
   START = 0,
   STOP = 1,
   DESTROY = 2,
+  UNRECOGNIZED = -1,
+}
+
+export enum PrebuiltWorkspaceBuildStage {
+  /** NONE - Default value for builds unrelated to prebuilds. */
+  NONE = 0,
+  /** CREATE - A prebuilt workspace is being provisioned. */
+  CREATE = 1,
+  /** CLAIM - A prebuilt workspace is being claimed. */
+  CLAIM = 2,
   UNRECOGNIZED = -1,
 }
 
@@ -86,6 +111,7 @@ export interface RichParameter {
   displayName: string;
   order: number;
   ephemeral: boolean;
+  formType: ParameterFormType;
 }
 
 /** RichParameterValue holds the key/value mapping of a parameter. */
@@ -94,8 +120,18 @@ export interface RichParameterValue {
   value: string;
 }
 
+/**
+ * ExpirationPolicy defines the policy for expiring unclaimed prebuilds.
+ * If a prebuild remains unclaimed for longer than ttl seconds, it is deleted and
+ * recreated to prevent staleness.
+ */
+export interface ExpirationPolicy {
+  ttl: number;
+}
+
 export interface Prebuild {
   instances: number;
+  expirationPolicy: ExpirationPolicy | undefined;
 }
 
 /** Preset represents a set of preset parameters for a template version. */
@@ -108,6 +144,11 @@ export interface Preset {
 export interface PresetParameter {
   name: string;
   value: string;
+}
+
+export interface ResourceReplacement {
+  resource: string;
+  paths: string[];
 }
 
 /** VariableValue holds the key/value mapping of a Terraform variable. */
@@ -164,6 +205,7 @@ export interface Agent {
   order: number;
   resourcesMonitoring: ResourcesMonitoring | undefined;
   devcontainers: Devcontainer[];
+  apiKeyScope: string;
 }
 
 export interface Agent_Metadata {
@@ -246,6 +288,7 @@ export interface App {
   order: number;
   hidden: boolean;
   openIn: AppOpenIn;
+  group: string;
 }
 
 /** Healthcheck represents configuration for checking for app readiness. */
@@ -279,11 +322,17 @@ export interface Module {
   source: string;
   version: string;
   key: string;
+  dir: string;
 }
 
 export interface Role {
   name: string;
   orgId: string;
+}
+
+export interface RunningAgentAuthToken {
+  agentId: string;
+  token: string;
 }
 
 /** Metadata is information about a workspace used in the execution of a build */
@@ -307,8 +356,9 @@ export interface Metadata {
   workspaceBuildId: string;
   workspaceOwnerLoginType: string;
   workspaceOwnerRbacRoles: Role[];
-  isPrebuild: boolean;
-  runningWorkspaceAgentToken: string;
+  /** Indicates that a prebuilt workspace is being built. */
+  prebuiltWorkspaceBuildStage: PrebuiltWorkspaceBuildStage;
+  runningAgentAuthTokens: RunningAgentAuthToken[];
 }
 
 /** Config represents execution configuration shared by all subsequent requests in the Session */
@@ -343,6 +393,7 @@ export interface PlanRequest {
   richParameterValues: RichParameterValue[];
   variableValues: VariableValue[];
   externalAuthProviders: ExternalAuthProvider[];
+  previousParameterValues: RichParameterValue[];
 }
 
 /** PlanComplete indicates a request to plan completed. */
@@ -355,6 +406,8 @@ export interface PlanComplete {
   modules: Module[];
   presets: Preset[];
   plan: Uint8Array;
+  resourceReplacements: ResourceReplacement[];
+  moduleFiles: Uint8Array;
 }
 
 /**
@@ -502,6 +555,9 @@ export const RichParameter = {
     if (message.ephemeral === true) {
       writer.uint32(136).bool(message.ephemeral);
     }
+    if (message.formType !== 0) {
+      writer.uint32(144).int32(message.formType);
+    }
     return writer;
   },
 };
@@ -518,10 +574,22 @@ export const RichParameterValue = {
   },
 };
 
+export const ExpirationPolicy = {
+  encode(message: ExpirationPolicy, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.ttl !== 0) {
+      writer.uint32(8).int32(message.ttl);
+    }
+    return writer;
+  },
+};
+
 export const Prebuild = {
   encode(message: Prebuild, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
     if (message.instances !== 0) {
       writer.uint32(8).int32(message.instances);
+    }
+    if (message.expirationPolicy !== undefined) {
+      ExpirationPolicy.encode(message.expirationPolicy, writer.uint32(18).fork()).ldelim();
     }
     return writer;
   },
@@ -549,6 +617,18 @@ export const PresetParameter = {
     }
     if (message.value !== "") {
       writer.uint32(18).string(message.value);
+    }
+    return writer;
+  },
+};
+
+export const ResourceReplacement = {
+  encode(message: ResourceReplacement, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.resource !== "") {
+      writer.uint32(10).string(message.resource);
+    }
+    for (const v of message.paths) {
+      writer.uint32(18).string(v!);
     }
     return writer;
   },
@@ -672,6 +752,9 @@ export const Agent = {
     }
     for (const v of message.devcontainers) {
       Devcontainer.encode(v!, writer.uint32(202).fork()).ldelim();
+    }
+    if (message.apiKeyScope !== "") {
+      writer.uint32(210).string(message.apiKeyScope);
     }
     return writer;
   },
@@ -871,6 +954,9 @@ export const App = {
     if (message.openIn !== 0) {
       writer.uint32(96).int32(message.openIn);
     }
+    if (message.group !== "") {
+      writer.uint32(106).string(message.group);
+    }
     return writer;
   },
 };
@@ -952,6 +1038,9 @@ export const Module = {
     if (message.key !== "") {
       writer.uint32(26).string(message.key);
     }
+    if (message.dir !== "") {
+      writer.uint32(34).string(message.dir);
+    }
     return writer;
   },
 };
@@ -963,6 +1052,18 @@ export const Role = {
     }
     if (message.orgId !== "") {
       writer.uint32(18).string(message.orgId);
+    }
+    return writer;
+  },
+};
+
+export const RunningAgentAuthToken = {
+  encode(message: RunningAgentAuthToken, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.agentId !== "") {
+      writer.uint32(10).string(message.agentId);
+    }
+    if (message.token !== "") {
+      writer.uint32(18).string(message.token);
     }
     return writer;
   },
@@ -1027,11 +1128,11 @@ export const Metadata = {
     for (const v of message.workspaceOwnerRbacRoles) {
       Role.encode(v!, writer.uint32(154).fork()).ldelim();
     }
-    if (message.isPrebuild === true) {
-      writer.uint32(160).bool(message.isPrebuild);
+    if (message.prebuiltWorkspaceBuildStage !== 0) {
+      writer.uint32(160).int32(message.prebuiltWorkspaceBuildStage);
     }
-    if (message.runningWorkspaceAgentToken !== "") {
-      writer.uint32(170).string(message.runningWorkspaceAgentToken);
+    for (const v of message.runningAgentAuthTokens) {
+      RunningAgentAuthToken.encode(v!, writer.uint32(170).fork()).ldelim();
     }
     return writer;
   },
@@ -1102,6 +1203,9 @@ export const PlanRequest = {
     for (const v of message.externalAuthProviders) {
       ExternalAuthProvider.encode(v!, writer.uint32(34).fork()).ldelim();
     }
+    for (const v of message.previousParameterValues) {
+      RichParameterValue.encode(v!, writer.uint32(42).fork()).ldelim();
+    }
     return writer;
   },
 };
@@ -1131,6 +1235,12 @@ export const PlanComplete = {
     }
     if (message.plan.length !== 0) {
       writer.uint32(74).bytes(message.plan);
+    }
+    for (const v of message.resourceReplacements) {
+      ResourceReplacement.encode(v!, writer.uint32(82).fork()).ldelim();
+    }
+    if (message.moduleFiles.length !== 0) {
+      writer.uint32(90).bytes(message.moduleFiles);
     }
     return writer;
   },

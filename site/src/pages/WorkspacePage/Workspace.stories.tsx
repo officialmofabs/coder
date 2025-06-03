@@ -1,11 +1,14 @@
 import { action } from "@storybook/addon-actions";
 import type { Meta, StoryObj } from "@storybook/react";
 import type { ProvisionerJobLog } from "api/typesGenerated";
-import { ProxyContext, getPreferredProxy } from "contexts/ProxyContext";
 import * as Mocks from "testHelpers/entities";
-import { withDashboardProvider } from "testHelpers/storybook";
+import {
+	withAuthProvider,
+	withDashboardProvider,
+	withProxyProvider,
+} from "testHelpers/storybook";
+import type { WorkspacePermissions } from "../../modules/workspaces/permissions";
 import { Workspace } from "./Workspace";
-import type { WorkspacePermissions } from "./permissions";
 
 // Helper function to create timestamps easily - Copied from AppStatuses.stories.tsx
 const createTimestamp = (
@@ -21,8 +24,9 @@ const createTimestamp = (
 const permissions: WorkspacePermissions = {
 	readWorkspace: true,
 	updateWorkspace: true,
-	updateTemplate: true,
-	viewDeploymentConfig: true,
+	updateWorkspaceVersion: true,
+	deploymentConfig: true,
+	deleteFailedWorkspace: true,
 };
 
 const meta: Meta<typeof Workspace> = {
@@ -40,32 +44,9 @@ const meta: Meta<typeof Workspace> = {
 				data: Mocks.MockListeningPortsResponse,
 			},
 		],
+		user: Mocks.MockUserOwner,
 	},
-	decorators: [
-		withDashboardProvider,
-		(Story) => (
-			<ProxyContext.Provider
-				value={{
-					proxyLatencies: Mocks.MockProxyLatencies,
-					proxy: getPreferredProxy([], undefined),
-					proxies: [],
-					isLoading: false,
-					isFetched: true,
-					clearProxy: () => {
-						return;
-					},
-					setProxy: () => {
-						return;
-					},
-					refetchProxyLatencies: (): Date => {
-						return new Date();
-					},
-				}}
-			>
-				<Story />
-			</ProxyContext.Provider>
-		),
-	],
+	decorators: [withAuthProvider, withDashboardProvider, withProxyProvider()],
 };
 
 export default meta;
@@ -96,8 +77,34 @@ export const Running: Story = {
 		},
 		handleStart: action("start"),
 		handleStop: action("stop"),
-		buildInfo: Mocks.MockBuildInfo,
 		template: Mocks.MockTemplate,
+	},
+};
+
+export const RunningWithChildAgent: Story = {
+	args: {
+		...Running.args,
+		workspace: {
+			...Mocks.MockWorkspace,
+			latest_build: {
+				...Mocks.MockWorkspace.latest_build,
+				resources: [
+					{
+						...Mocks.MockWorkspaceResource,
+						agents: [
+							{
+								...Mocks.MockWorkspaceAgent,
+								lifecycle_state: "ready",
+							},
+							{
+								...Mocks.MockWorkspaceChildAgent,
+								lifecycle_state: "ready",
+							},
+						],
+					},
+				],
+			},
+		},
 	},
 };
 
@@ -204,10 +211,13 @@ export const RunningWithAppStatuses: Story = {
 					available: 1,
 				},
 			},
+			latest_app_status: {
+				...Mocks.MockWorkspaceAppStatus,
+				agent_id: Mocks.MockWorkspaceAgent.id,
+			},
 		},
 		handleStart: action("start"),
 		handleStop: action("stop"),
-		buildInfo: Mocks.MockBuildInfo,
 		template: Mocks.MockTemplate,
 	},
 };

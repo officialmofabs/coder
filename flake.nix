@@ -125,6 +125,7 @@
             getopt
             gh
             git
+            git-lfs
             (lib.optionalDrvAttr stdenv.isLinux glibcLocales)
             gnumake
             gnused
@@ -140,6 +141,7 @@
             kubectl
             kubectx
             kubernetes-helm
+            lazydocker
             lazygit
             less
             mockgen

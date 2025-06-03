@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/coder/coder/v2/coderd/prebuilds"
+
 	"github.com/andybalholm/brotli"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -41,12 +43,13 @@ import (
 	"github.com/coder/quartz"
 	"github.com/coder/serpent"
 
+	"github.com/coder/coder/v2/codersdk/drpcsdk"
+
 	"github.com/coder/coder/v2/coderd/ai"
 	"github.com/coder/coder/v2/coderd/cryptokeys"
 	"github.com/coder/coder/v2/coderd/entitlements"
 	"github.com/coder/coder/v2/coderd/files"
 	"github.com/coder/coder/v2/coderd/idpsync"
-	"github.com/coder/coder/v2/coderd/prebuilds"
 	"github.com/coder/coder/v2/coderd/runtimeconfig"
 	"github.com/coder/coder/v2/coderd/webpush"
 
@@ -84,7 +87,6 @@ import (
 	"github.com/coder/coder/v2/coderd/workspaceapps"
 	"github.com/coder/coder/v2/coderd/workspacestats"
 	"github.com/coder/coder/v2/codersdk"
-	"github.com/coder/coder/v2/codersdk/drpc"
 	"github.com/coder/coder/v2/codersdk/healthsdk"
 	"github.com/coder/coder/v2/provisionerd/proto"
 	"github.com/coder/coder/v2/provisionersdk"
@@ -570,7 +572,7 @@ func New(options *Options) *API {
 		TemplateScheduleStore:       options.TemplateScheduleStore,
 		UserQuietHoursScheduleStore: options.UserQuietHoursScheduleStore,
 		AccessControlStore:          options.AccessControlStore,
-		FileCache:                   files.NewFromStore(options.Database),
+		FileCache:                   files.NewFromStore(options.Database, options.PrometheusRegistry),
 		Experiments:                 experiments,
 		WebpushDispatcher:           options.WebPushDispatcher,
 		healthCheckGroup:            &singleflight.Group[string, *healthsdk.HealthcheckReport]{},
@@ -800,6 +802,11 @@ func New(options *Options) *API {
 		PostAuthAdditionalHeadersFunc: options.PostAuthAdditionalHeadersFunc,
 	})
 
+	workspaceAgentInfo := httpmw.ExtractWorkspaceAgentAndLatestBuild(httpmw.ExtractWorkspaceAgentAndLatestBuildConfig{
+		DB:       options.Database,
+		Optional: false,
+	})
+
 	// API rate limit middleware. The counter is local and not shared between
 	// replicas or instances of this middleware.
 	apiRateLimiter := httpmw.RateLimit(options.APIRateLimit, time.Minute)
@@ -853,7 +860,7 @@ func New(options *Options) *API {
 				next.ServeHTTP(w, r)
 			})
 		},
-		// httpmw.CSRF(options.DeploymentValues.HTTPCookies),
+		httpmw.CSRF(options.DeploymentValues.HTTPCookies),
 	)
 
 	// This incurs a performance hit from the middleware, but is required to make sure
@@ -1115,6 +1122,7 @@ func New(options *Options) *API {
 				})
 			})
 		})
+
 		r.Route("/templateversions/{templateversion}", func(r chi.Router) {
 			r.Use(
 				apiKeyMiddleware,
@@ -1142,6 +1150,16 @@ func New(options *Options) *API {
 				r.Get("/{jobID}/logs", api.templateVersionDryRunLogs)
 				r.Get("/{jobID}/matched-provisioners", api.templateVersionDryRunMatchedProvisioners)
 				r.Patch("/{jobID}/cancel", api.patchTemplateVersionDryRunCancel)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(
+					httpmw.RequireExperiment(api.Experiments, codersdk.ExperimentDynamicParameters),
+				)
+				r.Route("/dynamic-parameters", func(r chi.Router) {
+					r.Post("/evaluate", api.templateVersionDynamicParametersEvaluate)
+					r.Get("/", api.templateVersionDynamicParametersWebsocket)
+				})
 			})
 		})
 		r.Route("/users", func(r chi.Router) {
@@ -1189,21 +1207,14 @@ func New(options *Options) *API {
 				})
 				r.Route("/{user}", func(r chi.Router) {
 					r.Group(func(r chi.Router) {
-						r.Use(httpmw.ExtractUserParamOptional(options.Database))
+						r.Use(httpmw.ExtractOrganizationMembersParam(options.Database, api.HTTPAuth.Authorize))
 						// Creating workspaces does not require permissions on the user, only the
 						// organization member. This endpoint should match the authz story of
 						// postWorkspacesByOrganization
 						r.Post("/workspaces", api.postUserWorkspaces)
-
-						// Similarly to creating a workspace, evaluating parameters for a
-						// new workspace should also match the authz story of
-						// postWorkspacesByOrganization
-						r.Route("/templateversions/{templateversion}", func(r chi.Router) {
-							r.Use(
-								httpmw.ExtractTemplateVersionParam(options.Database),
-								httpmw.RequireExperiment(api.Experiments, codersdk.ExperimentDynamicParameters),
-							)
-							r.Get("/parameters", api.templateVersionDynamicParameters)
+						r.Route("/workspace/{workspacename}", func(r chi.Router) {
+							r.Get("/", api.workspaceByOwnerAndName)
+							r.Get("/builds/{buildnumber}", api.workspaceBuildByBuildNumber)
 						})
 					})
 
@@ -1250,10 +1261,7 @@ func New(options *Options) *API {
 							r.Get("/", api.organizationsByUser)
 							r.Get("/{organizationname}", api.organizationByUserAndName)
 						})
-						r.Route("/workspace/{workspacename}", func(r chi.Router) {
-							r.Get("/", api.workspaceByOwnerAndName)
-							r.Get("/builds/{buildnumber}", api.workspaceBuildByBuildNumber)
-						})
+
 						r.Get("/gitsshkey", api.gitSSHKey)
 						r.Put("/gitsshkey", api.regenerateGitSSHKey)
 						r.Route("/notifications", func(r chi.Router) {
@@ -1284,10 +1292,7 @@ func New(options *Options) *API {
 				httpmw.RequireAPIKeyOrWorkspaceProxyAuth(),
 			).Get("/connection", api.workspaceAgentConnectionGeneric)
 			r.Route("/me", func(r chi.Router) {
-				r.Use(httpmw.ExtractWorkspaceAgentAndLatestBuild(httpmw.ExtractWorkspaceAgentAndLatestBuildConfig{
-					DB:       options.Database,
-					Optional: false,
-				}))
+				r.Use(workspaceAgentInfo)
 				r.Get("/rpc", api.workspaceAgentRPC)
 				r.Patch("/logs", api.patchWorkspaceAgentLogs)
 				r.Patch("/app-status", api.patchWorkspaceAgentAppStatus)
@@ -1296,6 +1301,7 @@ func New(options *Options) *API {
 				r.Get("/external-auth", api.workspaceAgentsExternalAuth)
 				r.Get("/gitsshkey", api.agentGitSSHKey)
 				r.Post("/log-source", api.workspaceAgentPostLogSource)
+				r.Get("/reinit", api.workspaceAgentReinit)
 			})
 			r.Route("/{workspaceagent}", func(r chi.Router) {
 				r.Use(
@@ -1318,6 +1324,7 @@ func New(options *Options) *API {
 				r.Get("/listening-ports", api.workspaceAgentListeningPorts)
 				r.Get("/connection", api.workspaceAgentConnection)
 				r.Get("/containers", api.workspaceAgentListContainers)
+				r.Post("/containers/devcontainers/container/{container}/recreate", api.workspaceAgentRecreateDevcontainer)
 				r.Get("/coordinate", api.workspaceAgentClientCoordinate)
 
 				// PTY is part of workspaceAppServer.
@@ -1528,17 +1535,19 @@ func New(options *Options) *API {
 
 	// Add CSP headers to all static assets and pages. CSP headers only affect
 	// browsers, so these don't make sense on api routes.
-	cspMW := httpmw.CSPHeaders(options.Telemetry.Enabled(), func() []string {
-		if api.DeploymentValues.Dangerous.AllowAllCors {
-			// In this mode, allow all external requests
-			return []string{"*"}
-		}
-		if f := api.WorkspaceProxyHostsFn.Load(); f != nil {
-			return (*f)()
-		}
-		// By default we do not add extra websocket connections to the CSP
-		return []string{}
-	}, additionalCSPHeaders)
+	cspMW := httpmw.CSPHeaders(
+		api.Experiments,
+		options.Telemetry.Enabled(), func() []string {
+			if api.DeploymentValues.Dangerous.AllowAllCors {
+				// In this mode, allow all external requests
+				return []string{"*"}
+			}
+			if f := api.WorkspaceProxyHostsFn.Load(); f != nil {
+				return (*f)()
+			}
+			// By default we do not add extra websocket connections to the CSP
+			return []string{}
+		}, additionalCSPHeaders)
 
 	// Static file handler must be wrapped with HSTS handler if the
 	// StrictTransportSecurityAge is set. We only need to set this header on
@@ -1589,7 +1598,7 @@ type API struct {
 	// passed to dbauthz.
 	AccessControlStore  *atomic.Pointer[dbauthz.AccessControlStore]
 	PortSharer          atomic.Pointer[portsharing.PortSharer]
-	FileCache           files.Cache
+	FileCache           *files.Cache
 	PrebuildsClaimer    atomic.Pointer[prebuilds.Claimer]
 	PrebuildsReconciler atomic.Pointer[prebuilds.ReconciliationOrchestrator]
 
@@ -1714,15 +1723,32 @@ func compressHandler(h http.Handler) http.Handler {
 	return cmp.Handler(h)
 }
 
+type MemoryProvisionerDaemonOption func(*memoryProvisionerDaemonOptions)
+
+func MemoryProvisionerWithVersionOverride(version string) MemoryProvisionerDaemonOption {
+	return func(opts *memoryProvisionerDaemonOptions) {
+		opts.versionOverride = version
+	}
+}
+
+type memoryProvisionerDaemonOptions struct {
+	versionOverride string
+}
+
 // CreateInMemoryProvisionerDaemon is an in-memory connection to a provisionerd.
 // Useful when starting coderd and provisionerd in the same process.
 func (api *API) CreateInMemoryProvisionerDaemon(dialCtx context.Context, name string, provisionerTypes []codersdk.ProvisionerType) (client proto.DRPCProvisionerDaemonClient, err error) {
 	return api.CreateInMemoryTaggedProvisionerDaemon(dialCtx, name, provisionerTypes, nil)
 }
 
-func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, name string, provisionerTypes []codersdk.ProvisionerType, provisionerTags map[string]string) (client proto.DRPCProvisionerDaemonClient, err error) {
+func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, name string, provisionerTypes []codersdk.ProvisionerType, provisionerTags map[string]string, opts ...MemoryProvisionerDaemonOption) (client proto.DRPCProvisionerDaemonClient, err error) {
+	options := &memoryProvisionerDaemonOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	tracer := api.TracerProvider.Tracer(tracing.TracerName)
-	clientSession, serverSession := drpc.MemTransportPipe()
+	clientSession, serverSession := drpcsdk.MemTransportPipe()
 	defer func() {
 		if err != nil {
 			_ = clientSession.Close()
@@ -1747,6 +1773,12 @@ func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, n
 		return nil, xerrors.Errorf("failed to parse built-in provisioner key ID: %w", err)
 	}
 
+	apiVersion := proto.CurrentVersion.String()
+	if options.versionOverride != "" && flag.Lookup("test.v") != nil {
+		// This should only be usable for unit testing. To fake a different provisioner version
+		apiVersion = options.versionOverride
+	}
+
 	//nolint:gocritic // in-memory provisioners are owned by system
 	daemon, err := api.Database.UpsertProvisionerDaemon(dbauthz.AsSystemRestricted(dialCtx), database.UpsertProvisionerDaemonParams{
 		Name:           name,
@@ -1756,7 +1788,7 @@ func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, n
 		Tags:           provisionersdk.MutateTags(uuid.Nil, provisionerTags),
 		LastSeenAt:     sql.NullTime{Time: dbtime.Now(), Valid: true},
 		Version:        buildinfo.Version(),
-		APIVersion:     proto.CurrentVersion.String(),
+		APIVersion:     apiVersion,
 		KeyID:          keyID,
 	})
 	if err != nil {
@@ -1768,6 +1800,7 @@ func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, n
 	logger := api.Logger.Named(fmt.Sprintf("inmem-provisionerd-%s", name))
 	srv, err := provisionerdserver.NewServer(
 		api.ctx, // use the same ctx as the API
+		daemon.APIVersion,
 		api.AccessURL,
 		daemon.ID,
 		defaultOrg.ID,
@@ -1790,6 +1823,7 @@ func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, n
 			Clock:               api.Clock,
 		},
 		api.NotificationsEnqueuer,
+		&api.PrebuildsReconciler,
 	)
 	if err != nil {
 		return nil, err
@@ -1800,6 +1834,7 @@ func (api *API) CreateInMemoryTaggedProvisionerDaemon(dialCtx context.Context, n
 	}
 	server := drpcserver.NewWithOptions(&tracing.DRPCHandler{Handler: mux},
 		drpcserver.Options{
+			Manager: drpcsdk.DefaultDRPCOptions(nil),
 			Log: func(err error) {
 				if xerrors.Is(err, io.EOF) {
 					return

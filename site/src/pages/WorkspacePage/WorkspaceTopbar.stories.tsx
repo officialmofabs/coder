@@ -2,15 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, screen, userEvent, waitFor, within } from "@storybook/test";
 import { getWorkspaceQuotaQueryKey } from "api/queries/workspaceQuota";
 import type { Workspace, WorkspaceQuota } from "api/typesGenerated";
-import { addHours, addMinutes } from "date-fns";
+import dayjs from "dayjs";
 import {
 	MockOrganization,
 	MockTemplate,
 	MockTemplateVersion,
-	MockUser,
+	MockUserOwner,
 	MockWorkspace,
 } from "testHelpers/entities";
-import { withDashboardProvider } from "testHelpers/storybook";
+import { withAuthProvider, withDashboardProvider } from "testHelpers/storybook";
 import { WorkspaceTopbar } from "./WorkspaceTopbar";
 
 // We want a workspace without a deadline to not pollute the screenshot. Also
@@ -28,12 +28,18 @@ const baseWorkspace: Workspace = {
 const meta: Meta<typeof WorkspaceTopbar> = {
 	title: "pages/WorkspacePage/WorkspaceTopbar",
 	component: WorkspaceTopbar,
-	decorators: [withDashboardProvider],
+	decorators: [withAuthProvider, withDashboardProvider],
 	args: {
 		workspace: baseWorkspace,
 		template: MockTemplate,
 		latestVersion: MockTemplateVersion,
-		canUpdateWorkspace: true,
+		permissions: {
+			readWorkspace: true,
+			updateWorkspaceVersion: true,
+			updateWorkspace: true,
+			deploymentConfig: true,
+			deleteFailedWorkspace: true,
+		},
 	},
 	parameters: {
 		layout: "fullscreen",
@@ -41,6 +47,7 @@ const meta: Meta<typeof WorkspaceTopbar> = {
 		chromatic: {
 			diffThreshold: 0.6,
 		},
+		user: MockUserOwner,
 	},
 };
 
@@ -65,7 +72,7 @@ export const ReadyWithDeadline: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 8).toISOString();
+					return dayjs().add(8, "hour").toISOString();
 				},
 			},
 		},
@@ -82,7 +89,7 @@ export const Connected: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 8).toISOString();
+					return dayjs().add(8, "hour").toISOString();
 				},
 			},
 		},
@@ -116,10 +123,10 @@ export const ConnectedWithMaxDeadline: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 1).toISOString();
+					return dayjs().add(1, "hour").toISOString();
 				},
 				get max_deadline() {
-					return addHours(new Date(), 8).toISOString();
+					return dayjs().add(8, "hour").toISOString();
 				},
 			},
 		},
@@ -153,10 +160,10 @@ export const ConnectedWithMaxDeadlineSoon: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 1).toISOString();
+					return dayjs().add(1, "hour").toISOString();
 				},
 				get max_deadline() {
-					return addHours(new Date(), 1).toISOString();
+					return dayjs().add(1, "hour").toISOString();
 				},
 			},
 		},
@@ -195,7 +202,7 @@ export const WithApproachingDeadline: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addMinutes(new Date(), 30).toISOString();
+					return dayjs().add(30, "minute").toISOString();
 				},
 			},
 		},
@@ -221,7 +228,7 @@ export const WithFarAwayDeadline: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 8).toISOString();
+					return dayjs().add(8, "hour").toISOString();
 				},
 			},
 		},
@@ -247,7 +254,7 @@ export const WithFarAwayDeadlineRequiredByTemplate: Story = {
 			latest_build: {
 				...MockWorkspace.latest_build,
 				get deadline() {
-					return addHours(new Date(), 8).toISOString();
+					return dayjs().add(8, "hour").toISOString();
 				},
 			},
 		},
@@ -277,7 +284,7 @@ export const WithQuotaNoOrgs: Story = {
 			{
 				key: getWorkspaceQuotaQueryKey(
 					MockOrganization.name,
-					MockUser.username,
+					MockUserOwner.username,
 				),
 				data: {
 					credits_consumed: 2,
@@ -295,7 +302,7 @@ export const WithQuotaWithOrgs: Story = {
 			{
 				key: getWorkspaceQuotaQueryKey(
 					MockOrganization.name,
-					MockUser.username,
+					MockUserOwner.username,
 				),
 				data: {
 					credits_consumed: 2,
