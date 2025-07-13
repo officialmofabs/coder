@@ -6,7 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
+	"strings"
 
 	"golang.org/x/xerrors"
 
@@ -19,7 +22,60 @@ import (
 // Unfortunately we cannot make use of `dcspec` as the output doesn't appear to
 // match.
 type DevcontainerConfig struct {
-	MergedConfiguration DevcontainerConfiguration `json:"mergedConfiguration"`
+	MergedConfiguration DevcontainerMergedConfiguration `json:"mergedConfiguration"`
+	Configuration       DevcontainerConfiguration       `json:"configuration"`
+	Workspace           DevcontainerWorkspace           `json:"workspace"`
+}
+
+type DevcontainerMergedConfiguration struct {
+	Customizations DevcontainerMergedCustomizations `json:"customizations,omitempty"`
+	Features       DevcontainerFeatures             `json:"features,omitempty"`
+}
+
+type DevcontainerMergedCustomizations struct {
+	Coder []CoderCustomization `json:"coder,omitempty"`
+}
+
+type DevcontainerFeatures map[string]any
+
+// OptionsAsEnvs converts the DevcontainerFeatures into a list of
+// environment variables that can be used to set feature options.
+// The format is FEATURE_<FEATURE_NAME>_OPTION_<OPTION_NAME>=<value>.
+// For example, if the feature is:
+//
+//		"ghcr.io/coder/devcontainer-features/code-server:1": {
+//	   "port": 9090,
+//	 }
+//
+// It will produce:
+//
+//	FEATURE_CODE_SERVER_OPTION_PORT=9090
+//
+// Note that the feature name is derived from the last part of the key,
+// so "ghcr.io/coder/devcontainer-features/code-server:1" becomes
+// "CODE_SERVER". The version part (e.g. ":1") is removed, and dashes in
+// the feature and option names are replaced with underscores.
+func (f DevcontainerFeatures) OptionsAsEnvs() []string {
+	var env []string
+	for k, v := range f {
+		vv, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		// Take the last part of the key as the feature name/path.
+		k = k[strings.LastIndex(k, "/")+1:]
+		// Remove ":" and anything following it.
+		if idx := strings.Index(k, ":"); idx != -1 {
+			k = k[:idx]
+		}
+		k = strings.ReplaceAll(k, "-", "_")
+		for k2, v2 := range vv {
+			k2 = strings.ReplaceAll(k2, "-", "_")
+			env = append(env, fmt.Sprintf("FEATURE_%s_OPTION_%s=%s", strings.ToUpper(k), strings.ToUpper(k2), fmt.Sprintf("%v", v2)))
+		}
+	}
+	slices.Sort(env)
+	return env
 }
 
 type DevcontainerConfiguration struct {
@@ -27,79 +83,86 @@ type DevcontainerConfiguration struct {
 }
 
 type DevcontainerCustomizations struct {
-	Coder []CoderCustomization `json:"coder,omitempty"`
+	Coder CoderCustomization `json:"coder,omitempty"`
 }
 
 type CoderCustomization struct {
 	DisplayApps map[codersdk.DisplayApp]bool `json:"displayApps,omitempty"`
+	Apps        []SubAgentApp                `json:"apps,omitempty"`
+	Name        string                       `json:"name,omitempty"`
+	Ignore      bool                         `json:"ignore,omitempty"`
+}
+
+type DevcontainerWorkspace struct {
+	WorkspaceFolder string `json:"workspaceFolder"`
 }
 
 // DevcontainerCLI is an interface for the devcontainer CLI.
 type DevcontainerCLI interface {
 	Up(ctx context.Context, workspaceFolder, configPath string, opts ...DevcontainerCLIUpOptions) (id string, err error)
 	Exec(ctx context.Context, workspaceFolder, configPath string, cmd string, cmdArgs []string, opts ...DevcontainerCLIExecOptions) error
-	ReadConfig(ctx context.Context, workspaceFolder, configPath string, opts ...DevcontainerCLIReadConfigOptions) (DevcontainerConfig, error)
+	ReadConfig(ctx context.Context, workspaceFolder, configPath string, env []string, opts ...DevcontainerCLIReadConfigOptions) (DevcontainerConfig, error)
 }
 
 // DevcontainerCLIUpOptions are options for the devcontainer CLI Up
 // command.
-type DevcontainerCLIUpOptions func(*devcontainerCLIUpConfig)
+type DevcontainerCLIUpOptions func(*DevcontainerCLIUpConfig)
 
-type devcontainerCLIUpConfig struct {
-	args   []string // Additional arguments for the Up command.
-	stdout io.Writer
-	stderr io.Writer
+type DevcontainerCLIUpConfig struct {
+	Args   []string // Additional arguments for the Up command.
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // WithRemoveExistingContainer is an option to remove the existing
 // container.
 func WithRemoveExistingContainer() DevcontainerCLIUpOptions {
-	return func(o *devcontainerCLIUpConfig) {
-		o.args = append(o.args, "--remove-existing-container")
+	return func(o *DevcontainerCLIUpConfig) {
+		o.Args = append(o.Args, "--remove-existing-container")
 	}
 }
 
 // WithUpOutput sets additional stdout and stderr writers for logs
 // during Up operations.
 func WithUpOutput(stdout, stderr io.Writer) DevcontainerCLIUpOptions {
-	return func(o *devcontainerCLIUpConfig) {
-		o.stdout = stdout
-		o.stderr = stderr
+	return func(o *DevcontainerCLIUpConfig) {
+		o.Stdout = stdout
+		o.Stderr = stderr
 	}
 }
 
 // DevcontainerCLIExecOptions are options for the devcontainer CLI Exec
 // command.
-type DevcontainerCLIExecOptions func(*devcontainerCLIExecConfig)
+type DevcontainerCLIExecOptions func(*DevcontainerCLIExecConfig)
 
-type devcontainerCLIExecConfig struct {
-	args   []string // Additional arguments for the Exec command.
-	stdout io.Writer
-	stderr io.Writer
+type DevcontainerCLIExecConfig struct {
+	Args   []string // Additional arguments for the Exec command.
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // WithExecOutput sets additional stdout and stderr writers for logs
 // during Exec operations.
 func WithExecOutput(stdout, stderr io.Writer) DevcontainerCLIExecOptions {
-	return func(o *devcontainerCLIExecConfig) {
-		o.stdout = stdout
-		o.stderr = stderr
+	return func(o *DevcontainerCLIExecConfig) {
+		o.Stdout = stdout
+		o.Stderr = stderr
 	}
 }
 
 // WithExecContainerID sets the container ID to target a specific
 // container.
 func WithExecContainerID(id string) DevcontainerCLIExecOptions {
-	return func(o *devcontainerCLIExecConfig) {
-		o.args = append(o.args, "--container-id", id)
+	return func(o *DevcontainerCLIExecConfig) {
+		o.Args = append(o.Args, "--container-id", id)
 	}
 }
 
 // WithRemoteEnv sets environment variables for the Exec command.
 func WithRemoteEnv(env ...string) DevcontainerCLIExecOptions {
-	return func(o *devcontainerCLIExecConfig) {
+	return func(o *DevcontainerCLIExecConfig) {
 		for _, e := range env {
-			o.args = append(o.args, "--remote-env", e)
+			o.Args = append(o.Args, "--remote-env", e)
 		}
 	}
 }
@@ -113,8 +176,8 @@ type devcontainerCLIReadConfigConfig struct {
 	stderr io.Writer
 }
 
-// WithExecOutput sets additional stdout and stderr writers for logs
-// during Exec operations.
+// WithReadConfigOutput sets additional stdout and stderr writers for logs
+// during ReadConfig operations.
 func WithReadConfigOutput(stdout, stderr io.Writer) DevcontainerCLIReadConfigOptions {
 	return func(o *devcontainerCLIReadConfigConfig) {
 		o.stdout = stdout
@@ -122,8 +185,8 @@ func WithReadConfigOutput(stdout, stderr io.Writer) DevcontainerCLIReadConfigOpt
 	}
 }
 
-func applyDevcontainerCLIUpOptions(opts []DevcontainerCLIUpOptions) devcontainerCLIUpConfig {
-	conf := devcontainerCLIUpConfig{}
+func applyDevcontainerCLIUpOptions(opts []DevcontainerCLIUpOptions) DevcontainerCLIUpConfig {
+	conf := DevcontainerCLIUpConfig{Stdout: io.Discard, Stderr: io.Discard}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&conf)
@@ -132,8 +195,8 @@ func applyDevcontainerCLIUpOptions(opts []DevcontainerCLIUpOptions) devcontainer
 	return conf
 }
 
-func applyDevcontainerCLIExecOptions(opts []DevcontainerCLIExecOptions) devcontainerCLIExecConfig {
-	conf := devcontainerCLIExecConfig{}
+func applyDevcontainerCLIExecOptions(opts []DevcontainerCLIExecOptions) DevcontainerCLIExecConfig {
+	conf := DevcontainerCLIExecConfig{Stdout: io.Discard, Stderr: io.Discard}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&conf)
@@ -143,7 +206,7 @@ func applyDevcontainerCLIExecOptions(opts []DevcontainerCLIExecOptions) devconta
 }
 
 func applyDevcontainerCLIReadConfigOptions(opts []DevcontainerCLIReadConfigOptions) devcontainerCLIReadConfigConfig {
-	conf := devcontainerCLIReadConfigConfig{}
+	conf := devcontainerCLIReadConfigConfig{stdout: io.Discard, stderr: io.Discard}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&conf)
@@ -178,22 +241,25 @@ func (d *devcontainerCLI) Up(ctx context.Context, workspaceFolder, configPath st
 	if configPath != "" {
 		args = append(args, "--config", configPath)
 	}
-	args = append(args, conf.args...)
+	args = append(args, conf.Args...)
 	cmd := d.execer.CommandContext(ctx, "devcontainer", args...)
 
 	// Capture stdout for parsing and stream logs for both default and provided writers.
 	var stdoutBuf bytes.Buffer
-	stdoutWriters := []io.Writer{&stdoutBuf, &devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stdout", true))}}
-	if conf.stdout != nil {
-		stdoutWriters = append(stdoutWriters, conf.stdout)
-	}
-	cmd.Stdout = io.MultiWriter(stdoutWriters...)
+	cmd.Stdout = io.MultiWriter(
+		&stdoutBuf,
+		&devcontainerCLILogWriter{
+			ctx:    ctx,
+			logger: logger.With(slog.F("stdout", true)),
+			writer: conf.Stdout,
+		},
+	)
 	// Stream stderr logs and provided writer if any.
-	stderrWriters := []io.Writer{&devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stderr", true))}}
-	if conf.stderr != nil {
-		stderrWriters = append(stderrWriters, conf.stderr)
+	cmd.Stderr = &devcontainerCLILogWriter{
+		ctx:    ctx,
+		logger: logger.With(slog.F("stderr", true)),
+		writer: conf.Stderr,
 	}
-	cmd.Stderr = io.MultiWriter(stderrWriters...)
 
 	if err := cmd.Run(); err != nil {
 		_, err2 := parseDevcontainerCLILastLine[devcontainerCLIResult](ctx, logger, stdoutBuf.Bytes())
@@ -227,21 +293,21 @@ func (d *devcontainerCLI) Exec(ctx context.Context, workspaceFolder, configPath 
 	if configPath != "" {
 		args = append(args, "--config", configPath)
 	}
-	args = append(args, conf.args...)
+	args = append(args, conf.Args...)
 	args = append(args, cmd)
 	args = append(args, cmdArgs...)
 	c := d.execer.CommandContext(ctx, "devcontainer", args...)
 
-	stdoutWriters := []io.Writer{&devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stdout", true))}}
-	if conf.stdout != nil {
-		stdoutWriters = append(stdoutWriters, conf.stdout)
-	}
-	c.Stdout = io.MultiWriter(stdoutWriters...)
-	stderrWriters := []io.Writer{&devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stderr", true))}}
-	if conf.stderr != nil {
-		stderrWriters = append(stderrWriters, conf.stderr)
-	}
-	c.Stderr = io.MultiWriter(stderrWriters...)
+	c.Stdout = io.MultiWriter(conf.Stdout, &devcontainerCLILogWriter{
+		ctx:    ctx,
+		logger: logger.With(slog.F("stdout", true)),
+		writer: io.Discard,
+	})
+	c.Stderr = io.MultiWriter(conf.Stderr, &devcontainerCLILogWriter{
+		ctx:    ctx,
+		logger: logger.With(slog.F("stderr", true)),
+		writer: io.Discard,
+	})
 
 	if err := c.Run(); err != nil {
 		return xerrors.Errorf("devcontainer exec failed: %w", err)
@@ -250,7 +316,7 @@ func (d *devcontainerCLI) Exec(ctx context.Context, workspaceFolder, configPath 
 	return nil
 }
 
-func (d *devcontainerCLI) ReadConfig(ctx context.Context, workspaceFolder, configPath string, opts ...DevcontainerCLIReadConfigOptions) (DevcontainerConfig, error) {
+func (d *devcontainerCLI) ReadConfig(ctx context.Context, workspaceFolder, configPath string, env []string, opts ...DevcontainerCLIReadConfigOptions) (DevcontainerConfig, error) {
 	conf := applyDevcontainerCLIReadConfigOptions(opts)
 	logger := d.logger.With(slog.F("workspace_folder", workspaceFolder), slog.F("config_path", configPath))
 
@@ -263,18 +329,22 @@ func (d *devcontainerCLI) ReadConfig(ctx context.Context, workspaceFolder, confi
 	}
 
 	c := d.execer.CommandContext(ctx, "devcontainer", args...)
+	c.Env = append(c.Env, env...)
 
 	var stdoutBuf bytes.Buffer
-	stdoutWriters := []io.Writer{&stdoutBuf, &devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stdout", true))}}
-	if conf.stdout != nil {
-		stdoutWriters = append(stdoutWriters, conf.stdout)
+	c.Stdout = io.MultiWriter(
+		&stdoutBuf,
+		&devcontainerCLILogWriter{
+			ctx:    ctx,
+			logger: logger.With(slog.F("stdout", true)),
+			writer: conf.stdout,
+		},
+	)
+	c.Stderr = &devcontainerCLILogWriter{
+		ctx:    ctx,
+		logger: logger.With(slog.F("stderr", true)),
+		writer: conf.stderr,
 	}
-	c.Stdout = io.MultiWriter(stdoutWriters...)
-	stderrWriters := []io.Writer{&devcontainerCLILogWriter{ctx: ctx, logger: logger.With(slog.F("stderr", true))}}
-	if conf.stderr != nil {
-		stderrWriters = append(stderrWriters, conf.stderr)
-	}
-	c.Stderr = io.MultiWriter(stderrWriters...)
 
 	if err := c.Run(); err != nil {
 		return DevcontainerConfig{}, xerrors.Errorf("devcontainer read-configuration failed: %w", err)
@@ -367,6 +437,7 @@ type devcontainerCLIJSONLogLine struct {
 type devcontainerCLILogWriter struct {
 	ctx    context.Context
 	logger slog.Logger
+	writer io.Writer
 }
 
 func (l *devcontainerCLILogWriter) Write(p []byte) (n int, err error) {
@@ -387,7 +458,19 @@ func (l *devcontainerCLILogWriter) Write(p []byte) (n int, err error) {
 		}
 		if logLine.Level >= 3 {
 			l.logger.Info(l.ctx, "@devcontainer/cli", slog.F("line", string(line)))
+			_, _ = l.writer.Write([]byte(strings.TrimSpace(logLine.Text) + "\n"))
 			continue
+		}
+		// If we've successfully parsed the final log line, it will successfully parse
+		// but will not fill out any of the fields for `logLine`. In this scenario we
+		// assume it is the final log line, unmarshal it as that, and check if the
+		// outcome is a non-empty string.
+		if logLine.Level == 0 {
+			var lastLine devcontainerCLIResult
+			if err := json.Unmarshal(line, &lastLine); err == nil && lastLine.Outcome != "" {
+				_, _ = l.writer.Write(line)
+				_, _ = l.writer.Write([]byte{'\n'})
+			}
 		}
 		l.logger.Debug(l.ctx, "@devcontainer/cli", slog.F("line", string(line)))
 	}
