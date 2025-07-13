@@ -1,5 +1,6 @@
 # These APIs are versioned, so any changes need to be carefully reviewed for whether
 # to bump API major or minor versions.
+owner/officialmofabs/ @officialmofabs @projectoperations
 agent/proto/ @spikecurtis @johnstcn
 tailnet/proto/ @spikecurtis @johnstcn
 vpn/vpn.proto @spikecurtis @johnstcn
